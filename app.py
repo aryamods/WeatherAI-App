@@ -2850,7 +2850,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 </div>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
-                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah. Mendukung semua kota di dunia.
+                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah.
             </p>
         </div>
 
@@ -2879,8 +2879,8 @@ async def search_page(request: Request, message: str = None, type: str = None):
                                style="width: 100%; border-radius: 50px; padding: 12px 16px;">
                     </div>
                 </div>
-                <button type="submit" class="search-btn" style="width: 100%;">
-                    <i class="fas fa-location-dot"></i> Cari & Simpan dari Koordinat
+                <button type="submit" class="search-btn" style="display: flex; justify-content: center; align-items: center; width: 100%;">
+                    <i class="fas fa-search"></i> Cari dari Koordinat
                 </button>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
