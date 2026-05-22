@@ -51,10 +51,11 @@ try:
 except ImportError:
     print("\033[92mINFO\033[0m:     python-dotenv tidak tersedia.")
 
-GEMINI_API_KEY = "AIzaSyD2pPh-rfKgqEeugy13BzWda-9ft3zWo6A"
-GEMINI_API_KEY_BACKUP = "AIzaSyBD1VSdjPI81zOzqlnHHOgWeqIBauvn_hI"
-GEMINI_API_KEY_BACKUP2 = "AIzaSyB0_TDsxSb2d0W3xZ_aY_BdZ4DuRi3h3ag"
-GEMINI_API_KEY_BACKUP3 = "AIzaSyBKSoGybzrpLwFMEm9oukqxJcF25I7XAPs"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY_BACKUP = os.environ.get("GEMINI_API_KEY_BACKUP", "")
+GEMINI_API_KEY_BACKUP2 = os.environ.get("GEMINI_API_KEY_BACKUP2", "")
+GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
+
 
 def initialize_gemini_client():
     api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
