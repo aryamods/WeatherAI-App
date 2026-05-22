@@ -2850,7 +2850,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 </div>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
-                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah.
+                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah yang ingin Anda cari.
             </p>
         </div>
 
