@@ -1700,7 +1700,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}
             localStorage.setItem('theme', 'dark');
         }}
-        // Update WhatsApp notification theme when toggling
         updateWhatsAppTheme();
     }}
 
@@ -1908,11 +1907,9 @@ def render_page(content: str, active: str = "home", message: str = None, message
         window.open('https://wa.me/6283168640385?text=menu', '_blank');
     }}
 
-    // Function to update WhatsApp notification theme without underline
     function updateWhatsAppTheme() {{
         var notif = document.getElementById('whatsappNotif');
         if (notif) {{
-            // Remove any existing text-decoration
             notif.style.textDecoration = 'none';
             var allChildren = notif.querySelectorAll('*');
             for (var i = 0; i < allChildren.length; i++) {{
@@ -2037,11 +2034,9 @@ def render_page(content: str, active: str = "home", message: str = None, message
         closeCustomPrompt();
     }}
 
-    // ============ AMAN: Password tidak hardcoded, verifikasi di backend ============
     function promptAndDeleteTestimonial(id) {{
         showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', (password) => {{
             if (password && password !== '') {{
-                // Kirim password ke backend untuk diverifikasi
                 fetch('/verify-delete-testimonial/' + id, {{
                     method: 'POST',
                     headers: {{
@@ -2216,46 +2211,37 @@ def render_page(content: str, active: str = "home", message: str = None, message
         }}
     }}
 
+    // ============ FUNGSI DOWNLOAD CNN - LANGSUNG TANPA KONFIRMASI ============
     function trainImageClassifier() {{
-        showCustomPrompt('Download Model CNN', 'Model akan di-download (78MB) dan dimuat. Lanjutkan? (Ketik "ya" untuk melanjutkan)', (confirm) => {{
-            if (!confirm || confirm.toLowerCase() !== 'ya') {{
-                if (confirm && confirm.toLowerCase() !== 'ya') {{
-                    showCustomAlert('Dibatalkan', 'Proses download dibatalkan.', 'info');
-                }}
-                return;
-            }}
+        var loadingDiv = document.getElementById('prediction-loading');
+        if (loadingDiv) {{
+            loadingDiv.style.display = 'block';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i><p style="margin-top: 12px;">📥 Mendownload model (78MB)...</p><p style="font-size: 12px; margin-top: 8px;">Mohon tunggu, proses ini mungkin memakan waktu 1-2 menit.</p>';
+        }}
+        
+        fetch('/download-cnn-model', {{
+            method: 'POST'
+        }})
+        .then(async function(response) {{
+            const data = await response.json();
             
-            var loadingDiv = document.getElementById('prediction-loading');
-            if (loadingDiv) {{
-                loadingDiv.style.display = 'block';
-                loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i><p style="margin-top: 12px;">📥 Mendownload model (78MB)...</p><p style="font-size: 12px; margin-top: 8px;">Mohon tunggu, proses ini mungkin memakan waktu 1-2 menit.</p>';
-            }}
+            if (loadingDiv) loadingDiv.style.display = 'none';
             
-            // Panggil endpoint download + load model
-            fetch('/download-cnn-model', {{
-                method: 'POST'
-            }})
-            .then(async function(response) {{
-                const data = await response.json();
-                
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                
-                if (data.success) {{
-                    showCustomAlert(
-                        'Berhasil!', 
-                        '✅ Model CNN berhasil di-download dan dimuat!\\n\\nSekarang Anda bisa menggunakan fitur deteksi cuaca dari gambar.',
-                        'success',
-                        function() {{ location.reload(); }}
-                    );
-                }} else {{
-                    showCustomAlert('Gagal', '❌ Gagal: ' + (data.error || 'Unknown error'), 'error');
-                }}
-            }})
-            .catch(function(error) {{
-                console.error('Download error:', error);
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
-            }});
+            if (data.success) {{
+                showCustomAlert(
+                    'Berhasil!', 
+                    '✅ Model CNN berhasil di-download dan dimuat!\\n\\nSekarang Anda bisa menggunakan fitur deteksi cuaca dari gambar.',
+                    'success',
+                    function() {{ location.reload(); }}
+                );
+            }} else {{
+                showCustomAlert('Gagal', '❌ Gagal: ' + (data.error || 'Unknown error'), 'error');
+            }}
+        }})
+        .catch(function(error) {{
+            console.error('Download error:', error);
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
         }});
     }}
 
@@ -2503,12 +2489,10 @@ async def ml_dashboard(request: Request):
     # Cek apakah model CNN sudah ada
     cnn_model_exists = os.path.exists(MODEL_CKPT_PATH)
     if cnn_model_exists:
-        cnn_status = "✅ Model CNN tersedia"
-        cnn_btn_text = "✅ Model Sudah Siap"
+        cnn_btn_text = "Model Sudah Dilatih"
         cnn_btn_disabled = "disabled"
     else:
-        cnn_status = "⚠️ Model CNN belum di-download (78MB)"
-        cnn_btn_text = "📥 Download & Load Model CNN (78MB)"
+        cnn_btn_text = "Latih Model (Upload Dataset)"
         cnn_btn_disabled = ""
 
     image_classifier_html = f"""
@@ -2561,7 +2545,7 @@ async def ml_dashboard(request: Request):
             </div>
 
             <button onclick="trainImageClassifier()" class="train-btn" {cnn_btn_disabled} style="margin-top: 20px; width: 100%; background: linear-gradient(135deg, #10b981, #059669);">
-                <i class="fas fa-download"></i> {cnn_btn_text}
+                {cnn_btn_text}
             </button>
             <p style="font-size: 11px; color: var(--text-tertiary); text-align: center; margin-top: 12px;">
                 *Model CNN 78MB akan di-download sekali saja saat pertama kali digunakan
