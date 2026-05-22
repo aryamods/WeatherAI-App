@@ -2018,11 +2018,11 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 .then(response => response.json())
                 .then(data => {{
                     if (data.success) {{
-                        showCustomAlert('Berhasil!', 'Testimonial berhasil dihapus!', 'success', () => {{
-                            window.location.href = '/about?message=Testimonial berhasil dihapus&type=success';
+                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', () => {{
+                            window.location.href = '/about?message=Ulasan berhasil dihapus&type=success';
                         }});
                     }} else {{
-                        showCustomAlert('Gagal!', data.message || 'Password salah! Testimonial tidak dapat dihapus.', 'error');
+                        showCustomAlert('Gagal!', data.message || 'Password salah! Ulasan tidak dapat dihapus.', 'error');
                     }}
                 }})
                 .catch(error => {{
@@ -2800,7 +2800,7 @@ async def verify_delete_testimonial(testimonial_id: int, request: PasswordReques
     # Verifikasi password
     if request.password == ADMIN_PASSWORD:
         delete_testimonial_by_id(testimonial_id)
-        return {"success": True, "message": "Testimonial berhasil dihapus"}
+        return {"success": True, "message": "Ulasan berhasil dihapus"}
     else:
         return {"success": False, "message": "Password salah!"}
 
