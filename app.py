@@ -1666,11 +1666,11 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}).then(function(response) {{
                 setTimeout(function() {{
                     hideTrainingModal();
-                    window.location.href = '/main?message=✅ Model ML berhasil dilatih!&type=success';
+                    window.location.href = '/main?message=Model berhasil dilatih!&type=success';
                 }}, 500);
             }}).catch(function(error) {{
                 hideTrainingModal();
-                window.location.href = '/main?message=❌ Gagal melatih model&type=error';
+                window.location.href = '/main?message=Gagal melatih model&type=error';
             }});
         }});
     }});
@@ -2969,9 +2969,9 @@ async def search_coords_post(latitude: float = Form(...), longitude: float = For
         save_location(result["name"], result["latitude"], result["longitude"], result["country"], result["timezone"])
 
         coords_text = f"{latitude:.4f}, {longitude:.4f}"
-        return RedirectResponse(url=f"/search?message=📍 {result['name']} ({coords_text}) berhasil ditambahkan ke favorit&type=success", status_code=303)
+        return RedirectResponse(url=f"/search?message={result['name']} ({coords_text}) berhasil ditambahkan ke favorit&type=success", status_code=303)
     else:
-        return RedirectResponse(url=f"/search?message=❌ Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
+        return RedirectResponse(url=f"/search?message=Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
 
 # ============ ROUTE ABOUT ============
 @app.get("/about", response_class=HTMLResponse)
@@ -3295,11 +3295,11 @@ async def train_model_route(request: Request):
         result = weather_predictor.train_model(selected_location["name"], selected_location["latitude"], selected_location["longitude"])
         if is_ajax:
             return {"success": True, "mae": result["mae"], "r2": result["r2"]}
-        return RedirectResponse(url=f"/main?message=✅ Model ML berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
+        return RedirectResponse(url=f"/main?message=Model berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
     except Exception as e:
         if is_ajax:
             return {"success": False, "error": str(e)}
-        return RedirectResponse(url=f"/main?message=❌ Gagal melatih model: {str(e)}&type=error", status_code=303)
+        return RedirectResponse(url=f"/main?message=Gagal melatih model: {str(e)}&type=error", status_code=303)
 
 # ============ ROUTE DOWNLOAD CNN MODEL ============
 @app.post("/download-cnn-model")
