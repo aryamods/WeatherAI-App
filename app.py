@@ -18,6 +18,7 @@ import warnings
 from pathlib import Path
 import base64
 import cv2
+import gdown
 
 warnings.filterwarnings("ignore")
 
@@ -93,6 +94,32 @@ except Exception as e:
 
 DB_PATH = "weather.db"
 
+def download_model_from_gdrive():
+    """Download CNN model from Google Drive if not exists"""
+    model_path = "weather_cnn_model.keras"
+    
+    if os.path.exists(model_path):
+        print(f"✅ Model already exists at {model_path}")
+        return True
+    
+    print("📥 Downloading CNN model from Google Drive (78MB)...")
+    try:
+        file_id = "1uNwqXmIaYTbAPEayQvTLbE_qqJ-mCU3y"
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, model_path, quiet=False)
+        
+        if os.path.exists(model_path):
+            file_size = os.path.getsize(model_path) / (1024 * 1024)
+            print(f"✅ Model downloaded! Size: {file_size:.2f} MB")
+            return True
+        else:
+            print("❌ Download failed - file not found")
+            return False
+    except Exception as e:
+        print(f"❌ Error downloading model: {e}")
+        return False
+
+download_model_from_gdrive()
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
