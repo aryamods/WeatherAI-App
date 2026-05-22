@@ -1659,6 +1659,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}
             localStorage.setItem('theme', 'dark');
         }}
+        // Update WhatsApp notification theme when toggling
+        updateWhatsAppTheme();
     }}
 
     var savedTheme = localStorage.getItem('theme');
@@ -1863,6 +1865,19 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     function openWhatsApp() {{
         window.open('https://wa.me/6283168640385?text=menu', '_blank');
+    }}
+
+    // Function to update WhatsApp notification theme without underline
+    function updateWhatsAppTheme() {{
+        var notif = document.getElementById('whatsappNotif');
+        if (notif) {{
+            // Remove any existing text-decoration
+            notif.style.textDecoration = 'none';
+            var allChildren = notif.querySelectorAll('*');
+            for (var i = 0; i < allChildren.length; i++) {{
+                allChildren[i].style.textDecoration = 'none';
+            }}
+        }}
     }}
 
     var wasClosed = localStorage.getItem('whatsappNotifClosed');
