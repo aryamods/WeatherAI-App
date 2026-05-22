@@ -31,7 +31,6 @@ app = FastAPI(
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
-
 class PasswordRequest(BaseModel):
     password: str
 
@@ -95,8 +94,6 @@ except Exception as e:
 
 DB_PATH = "weather.db"
 
-# HAPUS AUTO-DOWNLOAD - Model TIDAK download otomatis saat startup
-# Fungsi download tetap tersedia untuk dipanggil saat user klik tombol
 def download_model_from_gdrive():
     """Download CNN model from Google Drive if not exists"""
     model_path = "weather_cnn_model.keras"
@@ -121,8 +118,6 @@ def download_model_from_gdrive():
     except Exception as e:
         print(f"❌ Error downloading model: {e}")
         return False
-
-# TIDAK ADA PANGGILAN download_model_from_gdrive() DI SINI!
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -273,7 +268,6 @@ def delete_testimonial_by_id(testimonial_id: int):
     conn.commit()
     conn.close()
 
-# Inisialisasi database testimonial
 init_testimonials_db()
 
 def get_timezone_from_coords(latitude: float, longitude: float):
@@ -814,8 +808,6 @@ MODEL_CKPT_PATH = "weather_cnn_model.keras"
 class WeatherImageClassifier:
     def __init__(self):
         self.model = None
-        # TIDAK auto-load model saat init
-        # Model akan di-load saat user klik tombol download
 
     def build_model(self):
         if not TF_AVAILABLE:
@@ -1110,6 +1102,7 @@ selected_location = {
     "timezone": "Asia/Jakarta",
 }
 
+# ============ RENDER PAGE FUNCTION ============
 def render_page(content: str, active: str = "home", message: str = None, message_type: str = None, saved_locations: list = None, selected_location: dict = None):
     message_html = ""
     if message:
@@ -1162,7 +1155,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </script>
         """
 
-    return f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -1596,7 +1589,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </main>
     </div>
 
-<script>
+    <script>
+    // === JAVASCRIPT CODE (YANG SUDAH DIPERBAIKI) ===
     window.addEventListener('load', function() {{
         setTimeout(function() {{
             var loader = document.getElementById('loaderWrapper');
@@ -1956,24 +1950,25 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     // Custom Alert Functions
-    let currentAlertCallback = null;
-    let currentPromptCallback = null;
+    var currentAlertCallback = null;
+    var currentPromptCallback = null;
 
-    function showCustomAlert(title, message, type = 'info', callback = null) {{
-        const alert = document.getElementById('customAlert');
-        const icon = alert.querySelector('.custom-alert-icon i');
-        const titleEl = document.getElementById('alertTitle');
-        const messageEl = document.getElementById('alertMessage');
+    function showCustomAlert(title, message, type, callback) {{
+        if (type === undefined) type = 'info';
+        var alert = document.getElementById('customAlert');
+        var icon = alert.querySelector('.custom-alert-icon i');
+        var titleEl = document.getElementById('alertTitle');
+        var messageEl = document.getElementById('alertMessage');
         
         alert.classList.remove('error', 'success', 'warning', 'info');
         alert.classList.add(type);
         
-        let iconClass = 'fa-info-circle';
+        var iconClass = 'fa-info-circle';
         if (type === 'error') iconClass = 'fa-exclamation-circle';
         else if (type === 'success') iconClass = 'fa-check-circle';
         else if (type === 'warning') iconClass = 'fa-exclamation-triangle';
         
-        icon.className = `fas ${{iconClass}}`;
+        icon.className = 'fas ' + iconClass;
         
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -1983,14 +1978,14 @@ def render_page(content: str, active: str = "home", message: str = None, message
         alert.classList.add('show');
         
         if (type === 'success' || type === 'info') {{
-            setTimeout(() => {{
+            setTimeout(function() {{
                 closeCustomAlert();
             }}, 3000);
         }}
     }}
 
     function closeCustomAlert() {{
-        const alert = document.getElementById('customAlert');
+        var alert = document.getElementById('customAlert');
         alert.classList.remove('show');
         if (currentAlertCallback) {{
             currentAlertCallback();
@@ -1999,10 +1994,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function showCustomPrompt(title, message, callback) {{
-        const prompt = document.getElementById('customPrompt');
-        const titleEl = document.getElementById('promptTitle');
-        const messageEl = document.getElementById('promptMessage');
-        const input = document.getElementById('promptInput');
+        var prompt = document.getElementById('customPrompt');
+        var titleEl = document.getElementById('promptTitle');
+        var messageEl = document.getElementById('promptMessage');
+        var input = document.getElementById('promptInput');
         
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -2013,20 +2008,20 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         prompt.classList.add('show');
         
-        setTimeout(() => {{
+        setTimeout(function() {{
             input.focus();
         }}, 100);
     }}
 
     function closeCustomPrompt() {{
-        const prompt = document.getElementById('customPrompt');
+        var prompt = document.getElementById('customPrompt');
         prompt.classList.remove('show');
         currentPromptCallback = null;
     }}
 
     function submitPrompt() {{
-        const input = document.getElementById('promptInput');
-        const password = input.value;
+        var input = document.getElementById('promptInput');
+        var password = input.value;
         
         if (currentPromptCallback) {{
             currentPromptCallback(password);
@@ -2035,7 +2030,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function promptAndDeleteTestimonial(id) {{
-        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', (password) => {{
+        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', function(password) {{
             if (password && password !== '') {{
                 fetch('/verify-delete-testimonial/' + id, {{
                     method: 'POST',
@@ -2044,17 +2039,17 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     }},
                     body: JSON.stringify({{ password: password }})
                 }})
-                .then(response => response.json())
-                .then(data => {{
+                .then(function(response) {{ return response.json(); }})
+                .then(function(data) {{
                     if (data.success) {{
-                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', () => {{
+                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', function() {{
                             window.location.href = '/about?message=Ulasan berhasil dihapus&type=success';
                         }});
                     }} else {{
                         showCustomAlert('Gagal!', data.message || 'Password salah! Ulasan tidak dapat dihapus.', 'error');
                     }}
                 }})
-                .catch(error => {{
+                .catch(function(error) {{
                     console.error('Error:', error);
                     showCustomAlert('Error!', 'Terjadi kesalahan pada server.', 'error');
                 }});
@@ -2211,26 +2206,25 @@ def render_page(content: str, active: str = "home", message: str = None, message
         }}
     }}
 
-    // ============ FUNGSI DOWNLOAD CNN - LANGSUNG TANPA KONFIRMASI ============
     function trainImageClassifier() {{
         var loadingDiv = document.getElementById('prediction-loading');
         if (loadingDiv) {{
             loadingDiv.style.display = 'block';
-            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i><p style="margin-top: 12px;">📥 Mendownload model (78MB)...</p><p style="font-size: 12px; margin-top: 8px;">Mohon tunggu, proses ini mungkin memakan waktu 1-2 menit.</p>';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i>';
         }}
         
         fetch('/download-cnn-model', {{
             method: 'POST'
         }})
         .then(async function(response) {{
-            const data = await response.json();
+            var data = await response.json();
             
             if (loadingDiv) loadingDiv.style.display = 'none';
             
             if (data.success) {{
                 showCustomAlert(
                     'Berhasil!', 
-                    '✅ Model CNN berhasil di-download dan dimuat!\\n\\nSekarang Anda bisa menggunakan fitur deteksi cuaca dari gambar.',
+                    'Model berhasil diunduh!',
                     'success',
                     function() {{ location.reload(); }}
                 );
@@ -2250,9 +2244,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }} else {{
         initImageClassifier();
     }}
-</script>
+    </script>
 </body>
 </html>"""
+    return html_content
 
 # ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
@@ -2409,7 +2404,6 @@ async def home(request: Request):
 
     return HTMLResponse(content=render_page(content, active="home", saved_locations=saved_locations, selected_location=selected_location))
 
-
 # ============ ROUTE MAIN (ML) ============
 @app.get("/main", response_class=HTMLResponse)
 async def ml_dashboard(request: Request):
@@ -2486,7 +2480,6 @@ async def ml_dashboard(request: Request):
         </div>
         """
 
-    # Cek apakah model CNN sudah ada
     cnn_model_exists = os.path.exists(MODEL_CKPT_PATH)
     if cnn_model_exists:
         cnn_btn_text = "Model Sudah Dilatih"
@@ -2501,9 +2494,6 @@ async def ml_dashboard(request: Request):
             <span class="card-title"><i class="fas fa-camera"></i> Pendeteksi Cuaca dari Gambar (CNN)</span>
         </div>
         <div style="padding: 16px;">
-            <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary); text-align: center;">
-                {cnn_status}
-            </div>
             <div id="image-upload-area" style="
                 border: 2px dashed var(--border-color);
                 border-radius: 24px;
@@ -2604,7 +2594,6 @@ async def ml_dashboard(request: Request):
     """
 
     return HTMLResponse(content=render_page(content, active="ml", saved_locations=saved_locations, selected_location=selected_location))
-
 
 # ============ ROUTE TULIS ULASAN ============
 @app.get("/ulasan", response_class=HTMLResponse)
@@ -2741,18 +2730,17 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
     </div>
 
     <script>
-        // Rating star functionality
-        const stars = document.querySelectorAll('.rating-star');
-        const ratingInput = document.getElementById('ratingValue');
-        let selectedRating = 0;
+        var stars = document.querySelectorAll('.rating-star');
+        var ratingInput = document.getElementById('ratingValue');
+        var selectedRating = 0;
         
-        stars.forEach(star => {{
+        stars.forEach(function(star) {{
             star.addEventListener('click', function() {{
                 selectedRating = parseInt(this.dataset.value);
                 ratingInput.value = selectedRating;
                 
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= selectedRating) {{
                         s.classList.add('selected');
                     }} else {{
@@ -2762,9 +2750,9 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
             
             star.addEventListener('mouseenter', function() {{
-                const hoverVal = parseInt(this.dataset.value);
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                var hoverVal = parseInt(this.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= hoverVal) {{
                         s.style.color = '#fbbf24';
                     }} else {{
@@ -2774,8 +2762,8 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
             
             star.addEventListener('mouseleave', function() {{
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= selectedRating) {{
                         s.style.color = '#fbbf24';
                     }} else {{
@@ -2785,14 +2773,13 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
         }});
         
-        // Character counter
-        const textarea = document.querySelector('textarea[name="comment"]');
-        const charCount = document.getElementById('charCount');
+        var textarea = document.querySelector('textarea[name="comment"]');
+        var charCount = document.getElementById('charCount');
         
         textarea.addEventListener('input', function() {{
-            const length = this.value.length;
+            var length = this.value.length;
             charCount.textContent = length;
-            const counter = document.querySelector('.char-counter');
+            var counter = document.querySelector('.char-counter');
             if (length > 200) {{
                 counter.classList.add('warning');
             }} else {{
@@ -2817,7 +2804,6 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
     
     return HTMLResponse(content=render_page(content, active="ulasan", saved_locations=saved_locations, selected_location=selected_location, message=message, message_type=type))
 
-
 @app.post("/ulasan/submit")
 async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: str = Form(...), rating: int = Form(...)):
     if len(comment) > 250:
@@ -2826,28 +2812,17 @@ async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: s
     save_testimonial(name, role, comment, rating)
     return RedirectResponse(url="/ulasan?message=Terima kasih! Ulasan Anda telah disimpan&type=success", status_code=303)
 
-
-# ============ ROUTE DELETE TESTIMONIAL (LAMA) - DINONAKTIFKAN ============
-# @app.get("/delete-testimonial/{testimonial_id}")
-# async def delete_testimonial_route(testimonial_id: int):
-#     delete_testimonial_by_id(testimonial_id)
-#     return RedirectResponse(url="/about?message=Testimonial berhasil dihapus&type=success", status_code=303)
-
-
-# ============ ROUTE VERIFY DELETE TESTIMONIAL (BARU - AMAN) ============
+# ============ ROUTE VERIFY DELETE TESTIMONIAL ============
 @app.post("/verify-delete-testimonial/{testimonial_id}")
 async def verify_delete_testimonial(testimonial_id: int, request: PasswordRequest):
-    # Cek apakah password disediakan di environment variable
     if not ADMIN_PASSWORD:
         return {"success": False, "message": "Password belum dikonfigurasi di server"}
     
-    # Verifikasi password
     if request.password == ADMIN_PASSWORD:
         delete_testimonial_by_id(testimonial_id)
         return {"success": True, "message": "Ulasan berhasil dihapus"}
     else:
         return {"success": False, "message": "Password salah!"}
-
 
 # ============ ROUTE SEARCH ============
 @app.get("/search", response_class=HTMLResponse)
@@ -2949,8 +2924,8 @@ async def search_page(request: Request, message: str = None, type: str = None):
 
     <script>
         function setCoordinates(lat, lon) {{
-            const latInput = document.querySelector('input[name="latitude"]');
-            const lonInput = document.querySelector('input[name="longitude"]');
+            var latInput = document.querySelector('input[name="latitude"]');
+            var lonInput = document.querySelector('input[name="longitude"]');
 
             if (latInput && lonInput) {{
                 latInput.value = lat;
@@ -2961,7 +2936,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 latInput.style.borderColor = '#10b981';
                 lonInput.style.borderColor = '#10b981';
 
-                setTimeout(() => {{
+                setTimeout(function() {{
                     latInput.style.borderColor = '';
                     lonInput.style.borderColor = '';
                 }}, 2000);
@@ -2971,7 +2946,6 @@ async def search_page(request: Request, message: str = None, type: str = None):
     """
 
     return HTMLResponse(content=render_page(content=content, active="search", message=message, message_type=type, saved_locations=saved_locations, selected_location=selected_location))
-
 
 @app.post("/search/city", response_class=HTMLResponse)
 async def search_city_post(city_name: str = Form(...)):
@@ -2984,7 +2958,6 @@ async def search_city_post(city_name: str = Form(...)):
         return RedirectResponse(url=f"/search?message={result['name']} berhasil ditambahkan ke favorit&type=success", status_code=303)
     else:
         return RedirectResponse(url=f"/search?message=Kota '{city_name}' tidak ditemukan. Periksa ejaan Anda.&type=error", status_code=303)
-
 
 @app.post("/search/coords", response_class=HTMLResponse)
 async def search_coords_post(latitude: float = Form(...), longitude: float = Form(...)):
@@ -3003,14 +2976,12 @@ async def search_coords_post(latitude: float = Form(...), longitude: float = For
     else:
         return RedirectResponse(url=f"/search?message=❌ Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
 
-
 # ============ ROUTE ABOUT ============
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request, message: str = None, type: str = None):
     saved_locations = get_saved_locations()
     testimonials = get_all_testimonials()
     
-    # Generate testimonial HTML dengan scrollable horizontal
     testimonial_items = ""
     if testimonials:
         for t in testimonials:
@@ -3273,19 +3244,18 @@ async def about_page(request: Request, message: str = None, type: str = None):
     </div>
 
     <script>
-        const scrollContainer = document.getElementById('testimonialsScroll');
+        var scrollContainer = document.getElementById('testimonialsScroll');
         if (scrollContainer) {{
-            let isDown = false, startX, scrollLeft;
-            scrollContainer.addEventListener('mousedown', (e) => {{ isDown = true; scrollContainer.style.cursor = 'grabbing'; startX = e.pageX - scrollContainer.offsetLeft; scrollLeft = scrollContainer.scrollLeft; }});
-            scrollContainer.addEventListener('mouseleave', () => {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
-            scrollContainer.addEventListener('mouseup', () => {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
-            scrollContainer.addEventListener('mousemove', (e) => {{ if (!isDown) return; e.preventDefault(); const x = e.pageX - scrollContainer.offsetLeft; scrollContainer.scrollLeft = scrollLeft - (x - startX) * 2; }});
+            var isDown = false, startX, scrollLeft;
+            scrollContainer.addEventListener('mousedown', function(e) {{ isDown = true; scrollContainer.style.cursor = 'grabbing'; startX = e.pageX - scrollContainer.offsetLeft; scrollLeft = scrollContainer.scrollLeft; }});
+            scrollContainer.addEventListener('mouseleave', function() {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
+            scrollContainer.addEventListener('mouseup', function() {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
+            scrollContainer.addEventListener('mousemove', function(e) {{ if (!isDown) return; e.preventDefault(); var x = e.pageX - scrollContainer.offsetLeft; scrollContainer.scrollLeft = scrollLeft - (x - startX) * 2; }});
         }}
     </script>
     """
 
     return HTMLResponse(content=render_page(content, active="about", saved_locations=saved_locations, message=message, message_type=type))
-
 
 # ============ ROUTE LOCATION ============
 @app.get("/select-location/{location_id}")
@@ -3312,12 +3282,10 @@ async def select_location(location_id: int):
         }
     return RedirectResponse(url="/", status_code=303)
 
-
 @app.get("/delete-location/{location_id}")
 async def delete_location_route(location_id: int):
     delete_location(location_id)
     return RedirectResponse(url="/?message=Lokasi berhasil dihapus&type=success", status_code=303)
-
 
 # ============ ROUTE TRAIN MODEL ============
 @app.get("/train-model")
@@ -3336,22 +3304,18 @@ async def train_model_route(request: Request):
             return {"success": False, "error": str(e)}
         return RedirectResponse(url=f"/main?message=❌ Gagal melatih model: {str(e)}&type=error", status_code=303)
 
-
 # ============ ROUTE DOWNLOAD CNN MODEL ============
 @app.post("/download-cnn-model")
 async def download_cnn_model():
-    """Download CNN model from Google Drive and load it"""
     try:
         if not TF_AVAILABLE:
             return {"success": False, "error": "TensorFlow tidak tersedia"}
         
-        # Download model
         success = download_model_from_gdrive()
         
         if not success:
             return {"success": False, "error": "Gagal download model dari Google Drive"}
         
-        # Load model ke classifier
         weather_image_classifier.load_model()
         
         if weather_image_classifier.model is None:
@@ -3364,7 +3328,6 @@ async def download_cnn_model():
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}
-
 
 # ============ ROUTE PREDICT IMAGE ============
 @app.post("/predict-weather-image")
@@ -3394,7 +3357,6 @@ async def predict_weather_from_image(file: UploadFile = File(...)):
         print(f"Error predict image: {e}")
         return {"success": False, "error": str(e)}
 
-
 @app.post("/train-image-classifier")
 async def train_image_classifier_route(dataset_path: str):
     try:
@@ -3410,7 +3372,6 @@ async def train_image_classifier_route(dataset_path: str):
         return {"success": True, "accuracy": result["accuracy"], "val_accuracy": result["val_accuracy"]}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8001)
