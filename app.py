@@ -19,6 +19,7 @@ from pathlib import Path
 import base64
 import cv2
 import gdown
+import json
 
 warnings.filterwarnings("ignore")
 
@@ -94,6 +95,8 @@ except Exception as e:
 
 DB_PATH = "weather.db"
 
+# HAPUS AUTO-DOWNLOAD - Model TIDAK download otomatis saat startup
+# Fungsi download tetap tersedia untuk dipanggil saat user klik tombol
 def download_model_from_gdrive():
     """Download CNN model from Google Drive if not exists"""
     model_path = "weather_cnn_model.keras"
@@ -119,7 +122,8 @@ def download_model_from_gdrive():
         print(f"❌ Error downloading model: {e}")
         return False
 
-download_model_from_gdrive()
+# TIDAK ADA PANGGILAN download_model_from_gdrive() DI SINI!
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -810,7 +814,8 @@ MODEL_CKPT_PATH = "weather_cnn_model.keras"
 class WeatherImageClassifier:
     def __init__(self):
         self.model = None
-        self.load_model()
+        # TIDAK auto-load model saat init
+        # Model akan di-load saat user klik tombol download
 
     def build_model(self):
         if not TF_AVAILABLE:
@@ -878,7 +883,9 @@ class WeatherImageClassifier:
             except Exception as e:
                 print(f"⚠️ Gagal memuat model CNN: {e}")
                 return False
-        return False
+        else:
+            print(f"⚠️ Model CNN belum di-download. Silakan klik tombol 'Download & Load Model CNN'")
+            return False
 
     def predict_image(self, image_bytes: bytes) -> dict:
         if not TF_AVAILABLE:
@@ -887,7 +894,7 @@ class WeatherImageClassifier:
         if self.model is None:
             self.load_model()
             if self.model is None:
-                return {"error": "Model CNN belum dilatih. Jalankan training terlebih dahulu.", "prediction": None, "confidence": 0}
+                return {"error": "Model CNN belum di-download. Klik tombol 'Download & Load Model CNN' terlebih dahulu.", "prediction": None, "confidence": 0}
 
         try:
             nparr = np.frombuffer(image_bytes, np.uint8)
@@ -2210,30 +2217,42 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function trainImageClassifier() {{
-        showCustomPrompt('Training Model CNN', 'Masukkan path folder dataset (contoh: ./weather_dataset):', (datasetPath) => {{
-            if (!datasetPath) return;
+        showCustomPrompt('Download Model CNN', 'Model akan di-download (78MB) dan dimuat. Lanjutkan? (Ketik "ya" untuk melanjutkan)', (confirm) => {{
+            if (!confirm || confirm.toLowerCase() !== 'ya') {{
+                if (confirm && confirm.toLowerCase() !== 'ya') {{
+                    showCustomAlert('Dibatalkan', 'Proses download dibatalkan.', 'info');
+                }}
+                return;
+            }}
             
             var loadingDiv = document.getElementById('prediction-loading');
-            if (loadingDiv) loadingDiv.style.display = 'block';
+            if (loadingDiv) {{
+                loadingDiv.style.display = 'block';
+                loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i><p style="margin-top: 12px;">📥 Mendownload model (78MB)...</p><p style="font-size: 12px; margin-top: 8px;">Mohon tunggu, proses ini mungkin memakan waktu 1-2 menit.</p>';
+            }}
             
-            fetch('/train-image-classifier?dataset_path=' + encodeURIComponent(datasetPath), {{
+            // Panggil endpoint download + load model
+            fetch('/download-cnn-model', {{
                 method: 'POST'
             }})
-            .then(function(response) {{ return response.json(); }})
-            .then(function(data) {{
+            .then(async function(response) {{
+                const data = await response.json();
+                
                 if (loadingDiv) loadingDiv.style.display = 'none';
+                
                 if (data.success) {{
                     showCustomAlert(
                         'Berhasil!', 
-                        '✅ Model berhasil dilatih!\\nAccuracy: ' + (data.accuracy * 100).toFixed(2) + '%\\nVal Accuracy: ' + (data.val_accuracy * 100).toFixed(2) + '%',
+                        '✅ Model CNN berhasil di-download dan dimuat!\\n\\nSekarang Anda bisa menggunakan fitur deteksi cuaca dari gambar.',
                         'success',
                         function() {{ location.reload(); }}
                     );
                 }} else {{
-                    showCustomAlert('Gagal', '❌ Gagal melatih model: ' + data.error, 'error');
+                    showCustomAlert('Gagal', '❌ Gagal: ' + (data.error || 'Unknown error'), 'error');
                 }}
             }})
             .catch(function(error) {{
+                console.error('Download error:', error);
                 if (loadingDiv) loadingDiv.style.display = 'none';
                 showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
             }});
@@ -2481,12 +2500,26 @@ async def ml_dashboard(request: Request):
         </div>
         """
 
+    # Cek apakah model CNN sudah ada
+    cnn_model_exists = os.path.exists(MODEL_CKPT_PATH)
+    if cnn_model_exists:
+        cnn_status = "✅ Model CNN tersedia"
+        cnn_btn_text = "✅ Model Sudah Siap"
+        cnn_btn_disabled = "disabled"
+    else:
+        cnn_status = "⚠️ Model CNN belum di-download (78MB)"
+        cnn_btn_text = "📥 Download & Load Model CNN (78MB)"
+        cnn_btn_disabled = ""
+
     image_classifier_html = f"""
     <div class="glass-card" style="height: 100%;">
         <div class="card-header">
             <span class="card-title"><i class="fas fa-camera"></i> Pendeteksi Cuaca dari Gambar (CNN)</span>
         </div>
         <div style="padding: 16px;">
+            <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary); text-align: center;">
+                {cnn_status}
+            </div>
             <div id="image-upload-area" style="
                 border: 2px dashed var(--border-color);
                 border-radius: 24px;
@@ -2527,11 +2560,11 @@ async def ml_dashboard(request: Request):
                 <p style="margin-top: 12px;">Menganalisis gambar...</p>
             </div>
 
-            <button onclick="trainImageClassifier()" class="train-btn" style="margin-top: 20px; width: 100%; background: linear-gradient(135deg, #10b981, #059669);">
-                <i class="fas fa-database"></i> Latih Model CNN (Upload Dataset)
+            <button onclick="trainImageClassifier()" class="train-btn" {cnn_btn_disabled} style="margin-top: 20px; width: 100%; background: linear-gradient(135deg, #10b981, #059669);">
+                <i class="fas fa-download"></i> {cnn_btn_text}
             </button>
             <p style="font-size: 11px; color: var(--text-tertiary); text-align: center; margin-top: 12px;">
-                *pastikan gambar memiliki resolusi yang cukup dan jelas
+                *Model CNN 78MB akan di-download sekali saja saat pertama kali digunakan
             </p>
         </div>
     </div>
@@ -3318,6 +3351,35 @@ async def train_model_route(request: Request):
         if is_ajax:
             return {"success": False, "error": str(e)}
         return RedirectResponse(url=f"/main?message=❌ Gagal melatih model: {str(e)}&type=error", status_code=303)
+
+
+# ============ ROUTE DOWNLOAD CNN MODEL ============
+@app.post("/download-cnn-model")
+async def download_cnn_model():
+    """Download CNN model from Google Drive and load it"""
+    try:
+        if not TF_AVAILABLE:
+            return {"success": False, "error": "TensorFlow tidak tersedia"}
+        
+        # Download model
+        success = download_model_from_gdrive()
+        
+        if not success:
+            return {"success": False, "error": "Gagal download model dari Google Drive"}
+        
+        # Load model ke classifier
+        weather_image_classifier.load_model()
+        
+        if weather_image_classifier.model is None:
+            return {"success": False, "error": "Gagal memuat model CNN"}
+        
+        return {"success": True, "message": "Model berhasil di-download dan dimuat"}
+        
+    except Exception as e:
+        print(f"Error in download_cnn_model: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 
 # ============ ROUTE PREDICT IMAGE ============
