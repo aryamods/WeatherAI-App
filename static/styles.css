@@ -581,20 +581,32 @@ body::before {
     100% { background-position: -200% 0; }
 }
 
+/* ============ WHATSAPP NOTIFICATION - THEME RESPONSIVE ============ */
 .whatsapp-notification {
     position: fixed;
     top: 20px;
     right: 20px;
     width: 360px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
     border-radius: 20px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-lg);
     cursor: pointer;
     z-index: 1000;
     transform: translateX(calc(100% + 20px));
     transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    border: 1px solid rgba(37, 211, 102, 0.3);
+    border: 1px solid var(--glass-border);
     overflow: hidden;
+}
+
+body:not(.dark) .whatsapp-notification {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid rgba(37, 211, 102, 0.3);
+}
+
+body.dark .whatsapp-notification {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid rgba(37, 211, 102, 0.2);
 }
 
 .whatsapp-notification.show {
@@ -603,7 +615,7 @@ body::before {
 
 .whatsapp-notification:hover {
     transform: translateX(0) scale(1.02);
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-xl);
 }
 
 .notification-content {
@@ -621,18 +633,29 @@ body::before {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: linear-gradient(135deg, #25D366, #128C7E);
+    animation: whatsappPulse 2s ease infinite;
 }
 
-.notification-image i {
-    font-size: 28px;
-    color: white;
+@keyframes whatsappPulse {
+    0%, 100% { 
+        box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.4);
+    }
+    50% { 
+        box-shadow: 0 0 0 8px rgba(37, 211, 102, 0);
+    }
 }
 
 .notification-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px;
+    border-radius: 14px;
+}
+
+.notification-image i {
+    font-size: 32px;
+    color: white;
 }
 
 .notification-text {
@@ -642,11 +665,18 @@ body::before {
 .notification-title {
     font-weight: 800;
     font-size: 15px;
-    color: #075E54;
     margin-bottom: 4px;
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+body:not(.dark) .notification-title {
+    color: #075E54;
+}
+
+body.dark .notification-title {
+    color: #25D366;
 }
 
 .notification-title i {
@@ -656,9 +686,16 @@ body::before {
 
 .notification-desc {
     font-size: 12px;
-    color: var(--text-tertiary);
     line-height: 1.4;
     margin-bottom: 8px;
+}
+
+body:not(.dark) .notification-desc {
+    color: #475569;
+}
+
+body.dark .notification-desc {
+    color: #94a3b8;
 }
 
 .notification-badge {
@@ -689,10 +726,17 @@ body::before {
     align-items: center;
     justify-content: center;
     font-size: 10px;
-    color: #666;
     cursor: pointer;
     transition: all 0.2s ease;
     z-index: 10;
+}
+
+body:not(.dark) .notification-close {
+    color: #64748b;
+}
+
+body.dark .notification-close {
+    color: #94a3b8;
 }
 
 .notification-close:hover {
@@ -719,7 +763,7 @@ body::before {
     }
     
     .notification-image i {
-        font-size: 22px;
+        font-size: 24px;
     }
     
     .notification-image img {
