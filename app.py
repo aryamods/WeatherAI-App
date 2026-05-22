@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Form, Request, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 import uvicorn
 import sqlite3
 import requests
@@ -25,6 +26,12 @@ app = FastAPI(
     description="Aplikasi Prediksi Cuaca Cerdas Berbasis AI",
     version="3.0.0",
 )
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+
+class PasswordRequest(BaseModel):
+    password: str
 
 try:
     import tensorflow as tf
@@ -1996,13 +2003,34 @@ def render_page(content: str, active: str = "home", message: str = None, message
         closeCustomPrompt();
     }}
 
+    // ============ AMAN: Password tidak hardcoded, verifikasi di backend ============
     function promptAndDeleteTestimonial(id) {{
-        showCustomPrompt('Verifikasi Akses', 'masukkan kata kunci untuk menghapus komentar', (password) => {{
-            if (password === 'admin112233') {{
-                showCustomAlert('Menghapus...', 'Sedang menghapus testimonial...', 'info');
-                window.location.href = '/delete-testimonial/' + id;
-            }} else if (password !== undefined && password !== '') {{
-                showCustomAlert('Gagal!', 'Password salah! Testimonial tidak dapat dihapus.', 'error');
+        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', (password) => {{
+            if (password && password !== '') {{
+                // Kirim password ke backend untuk diverifikasi
+                fetch('/verify-delete-testimonial/' + id, {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json',
+                    }},
+                    body: JSON.stringify({{ password: password }})
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.success) {{
+                        showCustomAlert('Berhasil!', 'Testimonial berhasil dihapus!', 'success', () => {{
+                            window.location.href = '/about?message=Testimonial berhasil dihapus&type=success';
+                        }});
+                    }} else {{
+                        showCustomAlert('Gagal!', data.message || 'Password salah! Testimonial tidak dapat dihapus.', 'error');
+                    }}
+                }})
+                .catch(error => {{
+                    console.error('Error:', error);
+                    showCustomAlert('Error!', 'Terjadi kesalahan pada server.', 'error');
+                }});
+            }} else if (password === '') {{
+                showCustomAlert('Gagal!', 'Password tidak boleh kosong!', 'warning');
             }}
         }});
     }}
@@ -2755,10 +2783,26 @@ async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: s
     return RedirectResponse(url="/ulasan?message=Terima kasih! Ulasan Anda telah disimpan&type=success", status_code=303)
 
 
-@app.get("/delete-testimonial/{testimonial_id}")
-async def delete_testimonial_route(testimonial_id: int):
-    delete_testimonial_by_id(testimonial_id)
-    return RedirectResponse(url="/about?message=Testimonial berhasil dihapus&type=success", status_code=303)
+# ============ ROUTE DELETE TESTIMONIAL (LAMA) - DINONAKTIFKAN ============
+# @app.get("/delete-testimonial/{testimonial_id}")
+# async def delete_testimonial_route(testimonial_id: int):
+#     delete_testimonial_by_id(testimonial_id)
+#     return RedirectResponse(url="/about?message=Testimonial berhasil dihapus&type=success", status_code=303)
+
+
+# ============ ROUTE VERIFY DELETE TESTIMONIAL (BARU - AMAN) ============
+@app.post("/verify-delete-testimonial/{testimonial_id}")
+async def verify_delete_testimonial(testimonial_id: int, request: PasswordRequest):
+    # Cek apakah password disediakan di environment variable
+    if not ADMIN_PASSWORD:
+        return {"success": False, "message": "Password belum dikonfigurasi di server"}
+    
+    # Verifikasi password
+    if request.password == ADMIN_PASSWORD:
+        delete_testimonial_by_id(testimonial_id)
+        return {"success": True, "message": "Testimonial berhasil dihapus"}
+    else:
+        return {"success": False, "message": "Password salah!"}
 
 
 # ============ ROUTE SEARCH ============
