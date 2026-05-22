@@ -505,6 +505,14 @@ body::before {
 }
 
 .search-btn {
+    background: var(--accent-gradient);
+    border: none;
+    border-radius: 50px;
+    padding: 12px 32px;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
     transition: var(--transition);
     position: relative;
     overflow: hidden;
@@ -545,6 +553,10 @@ body::before {
     cursor: pointer;
     transition: var(--transition);
     margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .train-btn-ml:hover {
@@ -578,6 +590,10 @@ body::before {
     transition: var(--transition);
     margin-top: 20px;
     width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .train-btn-green:hover {
@@ -594,6 +610,30 @@ body::before {
 .train-btn-green:disabled:hover {
     transform: none;
     box-shadow: none;
+}
+
+/* Tombol umum (fallback) */
+.train-btn {
+    background: var(--accent-gradient);
+    background-size: 200% 200%;
+    animation: gradientShift 3s ease infinite;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 24px;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.train-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
 }
 
 @keyframes gradientShift {
@@ -1107,51 +1147,6 @@ body.dark .notification-close {
 .hero-subtitle {
     font-size: 15px;
     color: var(--text-tertiary);
-}
-
-.search-container {
-    background: var(--card-bg);
-    backdrop-filter: blur(12px);
-    border-radius: 60px;
-    padding: 6px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 32px;
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
-    transition: var(--transition);
-}
-
-.search-container:focus-within {
-    box-shadow: 0 8px 28px rgba(59, 130, 246, 0.2);
-    border-color: var(--accent);
-}
-
-.search-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    padding: 14px 24px;
-    font-size: 15px;
-    color: var(--text-primary);
-    font-family: inherit;
-}
-
-.search-input:focus {
-    outline: none;
-}
-
-.search-btn {
-    background: var(--accent-gradient);
-    border: none;
-    border-radius: 50px;
-    padding: 12px 32px;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: var(--transition);
 }
 
 .weather-hero {
