@@ -2458,7 +2458,7 @@ async def ml_dashboard(request: Request):
             </div>
             <form method="GET" action="/train-model" style="margin-top: 24px;" id="trainForm">
                 <button type="submit" class="train-btn-ml" style="width: 100%;">
-                <i class="fas fa-sync-alt"></i> Latih Ulang Model ML</button>
+                <i class="fas fa-sync-alt"></i> Latih Ulang Model</button>
             </form>
         </div>
         """
@@ -2473,7 +2473,7 @@ async def ml_dashboard(request: Request):
                 <p style="color: var(--text-tertiary); margin-bottom: 24px;">Klik tombol di bawah untuk melatih model Random Forest Regressor</p>
                 <form method="GET" action="/train-model" id="trainForm">
                     <button type="submit" class="train-btn">
-                        <i class="fas fa-play"></i> Latih Model ML Sekarang
+                        Latih Model Sekarang
                     </button>
                 </form>
             </div>
@@ -2536,7 +2536,7 @@ async def ml_dashboard(request: Request):
 
             <button onclick="trainImageClassifier()" class="train-btn-green" {cnn_btn_disabled}>{cnn_btn_text}</button>
             <p style="font-size: 11px; color: var(--text-tertiary); text-align: center; margin-top: 12px;">
-                *Model CNN 78MB akan di-download sekali saja saat pertama kali digunakan
+                *pastikan gambar memiliki kualitas yang baik dan jelas
             </p>
         </div>
     </div>
