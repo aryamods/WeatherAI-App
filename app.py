@@ -105,7 +105,7 @@ def download_model_from_gdrive():
     
     print("📥 Downloading CNN model from Google Drive (78MB)...")
     try:
-         file_id = "1uNwqXmIaYTbAPEayQvTLbE_qqJ-mCU3y"
+        file_id = "1uNwqXmIaYTbAPEayQvTLbE_qqJ-mCU3y"
         url = f"https://drive.google.com/uc?id={file_id}"
         gdown.download(url, model_path, quiet=False)
         
