@@ -20,6 +20,9 @@ import base64
 import cv2
 import gdown
 import json
+import time
+import random
+from threading import Lock
 
 warnings.filterwarnings("ignore")
 
@@ -46,7 +49,7 @@ except ImportError:
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)
     print("\033[92mINFO\033[0m:     python-dotenv tersedia.")
 except ImportError:
     print("\033[92mINFO\033[0m:     python-dotenv tidak tersedia.")
@@ -56,42 +59,175 @@ GEMINI_API_KEY_BACKUP = os.environ.get("GEMINI_API_KEY_BACKUP", "")
 GEMINI_API_KEY_BACKUP2 = os.environ.get("GEMINI_API_KEY_BACKUP2", "")
 GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
 
+# ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
+class GeminiRotator:
+    def __init__(self, api_keys):
+        """
+        Inisialisasi rotator untuk multiple API keys
+        """
+        self.keys = []
+        for i, key in enumerate(api_keys):
+            if key:
+                self.keys.append({
+                    'key': key,
+                    'account': f"Account_{i+1}",
+                    'failures': 0,
+                    'cooldown_until': 0,
+                    'used_today': 0,
+                    'last_used': 0
+                })
+        
+        self.current_index = 0
+        self.lock = Lock()
+        self.last_reset = time.time()
+        self.daily_limit = 50  # Batas harian per key (free tier biasanya 50-60)
+        
+        print(f"\033[92mINFO\033[0m:     Gemini Rotator initialized with {len(self.keys)} API keys")
+    
+    def _reset_daily_counter(self):
+        """Reset counter harian setiap 24 jam"""
+        now = time.time()
+        if now - self.last_reset > 86400:  # 24 jam
+            for key in self.keys:
+                key['used_today'] = 0
+            self.last_reset = now
+            print("\033[92mINFO\033[0m:     Daily quota counters reset")
+    
+    def get_best_key(self):
+        """Pilih API key terbaik berdasarkan usage dan cooldown"""
+        with self.lock:
+            self._reset_daily_counter()
+            now = time.time()
+            
+            # Filter key yang tidak dalam cooldown dan belum mencapai limit harian
+            available = []
+            for key in self.keys:
+                if key['cooldown_until'] <= now and key['used_today'] < self.daily_limit:
+                    available.append(key)
+            
+            if not available:
+                # Jika semua key kena cooldown, cari yang paling cepat selesai
+                if self.keys:
+                    min_cooldown = min(k['cooldown_until'] for k in self.keys)
+                    wait_time = min_cooldown - now
+                    if wait_time > 0:
+                        print(f"⚠️ Semua API key dalam cooldown, tunggu {wait_time:.0f} detik")
+                    return None
+                return None
+            
+            # Pilih key dengan usage paling rendah
+            return min(available, key=lambda x: x['used_today'])
+    
+    def call_api(self, prompt, model="gemini-1.5-flash", max_retries=3):
+        """
+        Panggil Gemini API dengan rotasi key dan retry logic
+        """
+        for attempt in range(max_retries):
+            key_info = self.get_best_key()
+            
+            if not key_info:
+                if attempt < max_retries - 1:
+                    time.sleep(5)  # Tunggu 5 detik sebelum retry
+                    continue
+                else:
+                    print("❌ Tidak ada API key yang tersedia")
+                    return None
+            
+            try:
+                from google import genai
+                
+                print(f"📡 Menggunakan {key_info['account']} (used: {key_info['used_today']}/{self.daily_limit})")
+                
+                client = genai.Client(api_key=key_info['key'])
+                
+                # Panggil API dengan timeout
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config={
+                        'temperature': 0.7,
+                        'max_output_tokens': 500,
+                    }
+                )
+                
+                # Sukses, update metrics
+                key_info['used_today'] += 1
+                key_info['failures'] = 0
+                key_info['last_used'] = time.time()
+                
+                # Tambah delay kecil untuk menghindari rate limit
+                time.sleep(0.5)
+                
+                return response.text.strip()
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"⚠️ {key_info['account']} error: {error_msg[:100]}")
+                
+                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                    # Rate limit, set cooldown
+                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)  # Max 5 menit
+                    key_info['cooldown_until'] = time.time() + cooldown_time
+                    key_info['failures'] += 1
+                    print(f"   🔄 Cooldown for {cooldown_time} seconds")
+                    
+                elif "quota" in error_msg.lower():
+                    # Quota habis, cooldown lebih lama
+                    key_info['cooldown_until'] = time.time() + 3600  # 1 jam
+                    key_info['failures'] += 1
+                    print(f"   ⚠️ Quota exhausted, cooldown 1 hour")
+                    
+                else:
+                    # Error lain, cooldown sebentar
+                    key_info['cooldown_until'] = time.time() + 10
+                
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    print(f"   Retry in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+        
+        return None
+    
+    def get_status(self):
+        """Dapatkan status semua API keys"""
+        status = []
+        now = time.time()
+        for key in self.keys:
+            status.append({
+                'account': key['account'],
+                'used_today': key['used_today'],
+                'daily_limit': self.daily_limit,
+                'in_cooldown': key['cooldown_until'] > now,
+                'cooldown_remaining': max(0, key['cooldown_until'] - now),
+                'failures': key['failures']
+            })
+        return status
 
-def initialize_gemini_client():
-    api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
-    api_keys = [key for key in api_keys if key]
-
-    if not api_keys:
-        print("\033[92mINFO:\033[0m     API key tidak tersedia.")
-        return None, False
-
-    for i, api_key in enumerate(api_keys, 1):
-        try:
-            client = genai.Client(api_key=api_key)
-            test_response = client.models.generate_content(
-                model="gemini-2.5-flash", contents="Test connection"
-            )
-            print(f"\033[92mINFO\033[0m:     Ashley siap digunakan dengan API Key {i}")
-            print("   Model: gemini-2.5-flash")
-            return client, True
-        except Exception as e:
-            print(f"\033[92mINFO\033[0m:     API Key {i} gagal: {e}")
-            continue
-
-    print("\033[92mINFO\033[0m:     Semua API key gagal. AI features akan dinonaktifkan.")
-    return None, False
-
+# ============ INISIALISASI GEMINI ============
 AI_AVAILABLE = False
-client = None
+gemini_rotator = None
 
 try:
     from google import genai
-    client, AI_AVAILABLE = initialize_gemini_client()
+    
+    api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
+    api_keys = [key for key in api_keys if key]
+    
+    if api_keys:
+        gemini_rotator = GeminiRotator(api_keys)
+        # Jangan test call di startup untuk hemat kuota!
+        AI_AVAILABLE = True
+        print(f"\033[92mINFO\033[0m:     Gemini AI siap digunakan dengan {len(api_keys)} API keys")
+        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-1.5-flash")
+    else:
+        print("\033[93mWARNING\033[0m: Tidak ada API key yang dikonfigurasi")
+        
 except ImportError:
-    print("\033[92mINFO\033[0m:     Library google-genai belum terinstall.")
+    print("\033[91mERROR\033[0m: Library google-genai belum terinstall.")
+    print("        Install dengan: pip install google-genai")
 except Exception as e:
-    print(f"\033[92mINFO\033[0m:     Error inisialisasi: {e}")
-    AI_AVAILABLE = False
+    print(f"\033[91mERROR\033[0m: Error inisialisasi Gemini: {e}")
 
 DB_PATH = "weather.db"
 
@@ -116,10 +252,6 @@ def download_model_from_gdrive():
         else:
             print("❌ Download failed - file not found")
             return False
-    except Exception as e:
-        print(f"❌ Error downloading model: {e}")
-        return False
-
     except Exception as e:
         print(f"❌ Error downloading model: {e}")
         return False
@@ -1024,7 +1156,8 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
     return f"{p1}{p2} {p3} {p4}"
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
-    if not AI_AVAILABLE or client is None:
+    """Get AI insights using Gemini with automatic key rotation"""
+    if not AI_AVAILABLE or gemini_rotator is None:
         print("⚠️ AI tidak tersedia, menggunakan fallback")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
@@ -1084,19 +1217,36 @@ PANDUAN:
 Mulai menulis:"""
 
     try:
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        insights = response.text.strip()
-        print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
-
-        word_count = len(insights.split())
-        if word_count < 30 or word_count > 200:
-            print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
+        # Gunakan model yang lebih stabil dengan kuota lebih besar
+        insights = gemini_rotator.call_api(prompt, model="gemini-1.5-flash", max_retries=3)
+        
+        if insights:
+            print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
+            
+            word_count = len(insights.split())
+            if word_count < 30 or word_count > 200:
+                print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
+                return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
+            
+            return insights
+        else:
+            print("⚠️ Gemini returned None, menggunakan fallback")
             return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
-
-        return insights
+            
     except Exception as e:
         print(f"❌ Gemini API error: {e}")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
+
+# ============ ENDPOINT CEK STATUS API KEY ============
+@app.get("/api-key-status")
+async def api_key_status():
+    """Endpoint untuk mengecek status semua API keys"""
+    if gemini_rotator:
+        return {
+            "available": AI_AVAILABLE,
+            "keys": gemini_rotator.get_status()
+        }
+    return {"available": False, "keys": []}
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -1595,7 +1745,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </div>
 
     <script>
-    // === JAVASCRIPT CODE (YANG SUDAH DIPERBAIKI) ===
+    // === JAVASCRIPT CODE ===
     window.addEventListener('load', function() {{
         setTimeout(function() {{
             var loader = document.getElementById('loaderWrapper');
@@ -2252,9 +2402,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </script>
 </body>
 </html>"""
-    return html_content
-
-# ============ ROUTE HOME ============
+    return html_content# ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     global selected_location
