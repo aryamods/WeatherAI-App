@@ -115,10 +115,9 @@ class GeminiRotator:
                     return None
                 return None
             
-            # Pilih key dengan usage paling rendah
             return min(available, key=lambda x: x['used_today'])
     
-    def call_api(self, prompt, model="gemini-1.5-flash", max_retries=3):
+    def call_api(self, prompt, model="gemini-2.5-flash", max_retries=3):
         """
         Panggil Gemini API dengan rotasi key dan retry logic
         """
@@ -127,7 +126,7 @@ class GeminiRotator:
             
             if not key_info:
                 if attempt < max_retries - 1:
-                    time.sleep(5)  # Tunggu 5 detik sebelum retry
+                    time.sleep(5)
                     continue
                 else:
                     print("❌ Tidak ada API key yang tersedia")
@@ -140,7 +139,6 @@ class GeminiRotator:
                 
                 client = genai.Client(api_key=key_info['key'])
                 
-                # Panggil API dengan timeout
                 response = client.models.generate_content(
                     model=model,
                     contents=prompt,
@@ -150,12 +148,10 @@ class GeminiRotator:
                     }
                 )
                 
-                # Sukses, update metrics
                 key_info['used_today'] += 1
                 key_info['failures'] = 0
                 key_info['last_used'] = time.time()
                 
-                # Tambah delay kecil untuk menghindari rate limit
                 time.sleep(0.5)
                 
                 return response.text.strip()
@@ -219,7 +215,7 @@ try:
         # Jangan test call di startup untuk hemat kuota!
         AI_AVAILABLE = True
         print(f"\033[92mINFO\033[0m:     Gemini AI siap digunakan dengan {len(api_keys)} API keys")
-        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-1.5-flash")
+        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-2.5-flash")
     else:
         print("\033[93mWARNING\033[0m: Tidak ada API key yang dikonfigurasi")
         
@@ -1218,7 +1214,7 @@ Mulai menulis:"""
 
     try:
         # Gunakan model yang lebih stabil dengan kuota lebih besar
-        insights = gemini_rotator.call_api(prompt, model="gemini-1.5-flash", max_retries=3)
+        insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
         
         if insights:
             print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
