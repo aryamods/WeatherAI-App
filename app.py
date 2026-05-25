@@ -23,6 +23,7 @@ import json
 import time
 import random
 from threading import Lock
+import re
 
 warnings.filterwarnings("ignore")
 
@@ -58,6 +59,37 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_API_KEY_BACKUP = os.environ.get("GEMINI_API_KEY_BACKUP", "")
 GEMINI_API_KEY_BACKUP2 = os.environ.get("GEMINI_API_KEY_BACKUP2", "")
 GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
+
+# ============ FUNGSI PEMBERSIH TEKS AI ============
+def clean_ai_response(text: str) -> str:
+    """Membersihkan response AI dari karakter formatting seperti *, ", dll"""
+    if not text:
+        return text
+    
+    # Hapus tanda kutip di awal dan akhir
+    text = text.strip()
+    if text.startswith('"') and text.endswith('"'):
+        text = text[1:-1]
+    if text.startswith("'") and text.endswith("'"):
+        text = text[1:-1]
+    
+    # Hapus semua tanda * (formatting bold/italic)
+    text = text.replace('*', '')
+    
+    # Hapus kombinasi ** (double asterisk) jika ada
+    text = text.replace('**', '')
+    
+    # Hapus backticks jika ada
+    text = text.replace('`', '')
+    
+    # Hapus tanda kutip yang tersisa di tengah kalimat (opsional)
+    text = text.replace('"', '')
+    text = text.replace("'", "")
+    
+    # Bersihkan multiple spasi
+    text = re.sub(r'\s+', ' ', text)
+    
+    return text.strip()
 
 # ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
 class GeminiRotator:
@@ -1162,7 +1194,10 @@ def get_ai_insights_jaksel(weather, forecast, air_quality, location_name: str = 
     
     # Tambahin kata Jaksel random biar makin keren
     closings = ["Stay safe guys!", "Jangan lupa minum!", "Peace!", "Santuy aja!", "Chill!", "No worries!", "You got this!"]
-    result += f" {random.choice(closings)} ~Ashley {rw()} 🤙"
+    result += f" {random.choice(closings)} ~Ashley {random.choice(jaksel_words)} 🤙"
+    
+    # Bersihkan dari karakter formatting
+    result = clean_ai_response(result)
     
     return result
 
@@ -1261,7 +1296,10 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
     else:
         p4 = f"{trend} Diprediksi tidak ada hujan signifikan dalam 3 hari ke depan, cocok untuk merencanakan kegiatan luar ruangan."
 
-    return f"{p1}{p2} {p3} {p4}"
+    result = f"{p1}{p2} {p3} {p4}"
+    result = clean_ai_response(result)
+    
+    return result
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
     """Get AI insights using Gemini with automatic key rotation - Style Jaksel!"""
@@ -1295,7 +1333,7 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
     forecast_text = "\n".join(forecast_summary)
 
     # PROMPT BAHASA JAKSEL YANG KEREN!
-    prompt = f"""Lu adalah Ashley, asisten cuaca yang super chill dan gaul banget. Lagi ngobrol santai sama temen-temen di kafe Jaksel. Gaya bicara lu campuran Indonesia-Inggris, pake kata-kata kayak "literally", "basically", "like", "guys", "vibes", "makes sense", "for real", "you know", "actually", "honestly", "though", "kinda", "pretty much", "I mean", "so yeah", "anyway".
+    prompt = f"""Lu adalah Ashley, asisten cuaca yang super chill dan gaul banget. Lagi ngobrol santai sama temen-temen di kafe Jaksel. Gaya bicara lu campuran Indonesia-Inggris, pake kata-kata kayak literally, basically, like, guys, vibes, makes sense, for real, you know, actually, honestly, though, kinda, pretty much, I mean, so yeah, anyway.
 
 BUAT ANALISIS CUACA UNTUK {location} DENGAN DATA DI BAWAH INI:
 
@@ -1325,11 +1363,13 @@ ATURAN PENULISAN:
 6. Beri 1-2 kalimat prakiraan untuk besok
 7. JANGAN gunakan bullet points, buat paragraf mengalir
 8. JANGAN gunakan emoji
+9. JANGAN gunakan tanda kutip di awal atau akhir kalimat
+10. JANGAN gunakan tanda bintang untuk formatting
 
-CONTOH GAYA YANG BENAR:
-""Cuaca di Jaksel sore ini panas banget sih, 32°C tapi rasanya kayak 36°C karena humidity-nya 75%. Basically gerah banget, like seriously. Angin juga barely ada, cuma 8 km/jam, jadi kurang serves banget buat nyegerin. Good news-nya, air quality-nya lumayan sehat sih, AQI cuma 45, jadi aman buat olahraga outdoor. Besok suhunya bakal turun dikit jadi 30°C, awannya juga bakal lebih tebel dari biasanya. Sore-nya literally bakal ujan rintik-rintik, so jangan lupa bawa payung ya guys, nanti keujanan di jalan repot"
+CONTOH:
+Cuaca di Jakarta sore ini panas banget sih, 32°C tapi rasanya kayak 36°C karena humidity-nya 75 persen. Basically gerah banget, like seriously. Angin juga barely ada, cuma 8 km/jam, jadi kurang serves banget buat nyegerin. Good news-nya, air quality-nya lumayan sehat sih, AQI cuma 45, jadi aman buat olahraga outdoor. Besok suhunya bakal turun dikit jadi 30°C, awannya juga bakal lebih tebel dari biasanya. Sore-nya literally bakal ujan rintik-rintik, so jangan lupa bawa payung ya guys, nanti keujanan di jalan repot
 
-MULAI NULIS DENGAN GAYA JAKSEL:"""
+MULAI NULIS DENGAN GAYA JAKSEL (JANGAN PAKAI TANDA KUTIP):"""
 
     try:
         insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
@@ -1337,8 +1377,11 @@ MULAI NULIS DENGAN GAYA JAKSEL:"""
         if insights:
             print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
             
+            # Bersihkan response dari karakter formatting
+            insights = clean_ai_response(insights)
+            
             word_count = len(insights.split())
-            if word_count < 70 or word_count > 200:
+            if word_count < 80 or word_count > 175:
                 print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback Jaksel")
                 return get_ai_insights_jaksel(weather, forecast, air_quality, location_name)
             
