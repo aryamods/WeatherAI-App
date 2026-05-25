@@ -134,7 +134,6 @@ class GeminiRotator:
             
             try:
                 from google import genai
-                from google.genai import types as genai_types
                 
                 print(f"📡 Menggunakan {key_info['account']} (used: {key_info['used_today']}/{self.daily_limit})")
                 
@@ -143,13 +142,10 @@ class GeminiRotator:
                 response = client.models.generate_content(
                     model=model,
                     contents=prompt,
-                    config=genai_types.GenerateContentConfig(
-                        temperature=0.7,
-                        max_output_tokens=1500,
-                        thinking_config=genai_types.ThinkingConfig(
-                            thinking_budget=0,
-                        ),
-                    )
+                    config={
+                        'temperature': 0.7,
+                        'max_output_tokens': 1024,
+                    }
                 )
                 
                 key_info['used_today'] += 1
