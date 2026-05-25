@@ -3372,4 +3372,4 @@ async def train_image_classifier_route(dataset_path: str):
         return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
