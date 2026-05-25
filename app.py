@@ -143,8 +143,8 @@ class GeminiRotator:
                     model=model,
                     contents=prompt,
                     config={
-                        'temperature': 0.9,
-                        'max_output_tokens': 1500,
+                        'temperature': 0.7,
+                        'max_output_tokens': 500,
                     }
                 )
                 
@@ -1055,119 +1055,7 @@ class WeatherImageClassifier:
 
 weather_image_classifier = WeatherImageClassifier()
 
-# ============ FALLBACK JAKSEL (BAHASA GAUL JAKSEL) ============
-def get_ai_insights_jaksel(weather, forecast, air_quality, location_name: str = None):
-    """Fallback dengan gaya bahasa Jaksel yang keren"""
-    temp = weather.get("temperature", 0)
-    feels_like = weather.get("feels_like", 0)
-    humidity = weather.get("humidity", 0)
-    precip = weather.get("precipitation", 0)
-    wind = weather.get("wind_speed", 0)
-    weather_code = weather.get("weather_code", 0)
-    uv = weather.get("uv_index", 5)
-    pressure = weather.get("pressure", 1012)
-
-    aqi = air_quality.get("aqi", 0)
-    aqi_status = air_quality.get("status", "Baik")
-    pm25 = air_quality.get("pm25", 0)
-    pm10 = air_quality.get("pm10", 0)
-
-    condition = get_condition_text(weather_code)
-    location = location_name or "Lokasi Anda"
-
-    # Data prakiraan
-    temp_next = forecast[1]["temp_max"] if len(forecast) > 1 else temp
-    precip_next = forecast[1]["precipitation"] if len(forecast) > 1 else precip
-    uv_next = forecast[1]["uv_index"] if len(forecast) > 1 else uv
-
-    # Kumpulan kata Jaksel yang keren
-    jaksel_words = [
-        "literally", "basically", "like", "guys", "vibes", "makes sense", 
-        "for real", "you know", "actually", "honestly", "though", "kinda",
-        "pretty much", "I mean", "you know what I mean", "so yeah", "anyway"
-    ]
-    
-    import random
-    def rw(): return random.choice(jaksel_words)
-
-    # Bangun paragraf gaya Jaksel
-    if condition == "Cerah":
-        p1 = f"Halo {rw()}! Cuaca di {location} hari ini {condition.lower()} banget sih. Suhunya {int(temp)}°C, tapi rasanya {rw()} kayak {int(feels_like)}°C karena humidity-nya {int(humidity)}%. {rw().upper()} basically lagi on fire gitu guys!"
-    elif condition == "Berawan":
-        p1 = f"Guys {rw()}, langit {location} tuh {condition.lower()} banget hari ini. Suhu {int(temp)}°C, feels like {int(feels_like)}°C. {rw().capitalize()} agak gloomy gitu vibes-nya, {rw()}."
-    elif "Hujan" in condition:
-        p1 = f"{rw().upper()}! Lagi {condition.lower()} nih di {location}. Suhu turun jadi {int(temp)}°C, {rw()} jadi dingin gitu. {rw().capitalize()} bawa payung ya guys, nanti keujanan {rw()} repot."
-    else:
-        p1 = f"Basically {rw()}, cuaca di {location} hari ini {condition.lower()} with suhu {int(temp)}°C. {rw().capitalize()} feels like {int(feels_like)}°C karena humidity-nya {int(humidity)}%. {rw()}"
-
-    # Angin dan hujan
-    if wind > 15:
-        p2 = f"Anginnya {rw()} kenceng banget, {int(wind)} km/jam {rw()}. {rw().capitalize()} buat yang naik motor hati-hati ya, bisa flying {rw()}!"
-    elif wind > 5:
-        p2 = f"Anginnya {rw()} sepoi-sepoi, {int(wind)} km/jam. {rw().capitalize()} nyaman sih buat jalan-jalan {rw()}."
-    else:
-        p2 = f"Anginnya {rw()} barely ada, cuma {int(wind)} km/jam. {rw().capitalize()} lumayan gerah sih {rw()}."
-
-    if precip > 5:
-        p2 += f" Oh ya, hujannya lumayan deras tuh {precip:.1f} mm. {rw().capitalize()} waspada genangan ya guys!"
-    elif precip > 1:
-        p2 += f" Ada hujan rintik-rintik {precip:.1f} mm. {rw().capitalize()} sedia payung {rw()}."
-    elif precip > 0:
-        p2 += f" Gerimis tipis sih {precip:.1f} mm. {rw().capitalize()} barely noticeable {rw()}."
-    else:
-        p2 += f" Alhamdulillah {rw()} no hujan hari ini. {rw().capitalize()} cerah gitu."
-
-    # UV Index
-    if uv > 8:
-        p3 = f"UV index-nya {rw()} gila banget {uv:.1f}! {rw().capitalize()} bisa item dalam 10 menit. {rw().upper()} pake sunscreen ya guys!"
-    elif uv > 6:
-        p3 = f"UV index-nya tinggi nih {uv:.1f}. {rw().capitalize()} better pake sunscreen {rw()}."
-    elif uv > 3:
-        p3 = f"UV index-nya sedang {uv:.1f}. {rw().capitalize()} masih aman sih {rw()}."
-    else:
-        p3 = f"UV index-nya rendah {uv:.1f}. {rw().capitalize()} aman {rw()}."
-
-    # Kualitas Udara
-    if aqi <= 50:
-        p4 = f"Good news {rw()}! Kualitas udara {aqi_status.lower()} banget, AQI {aqi}. {rw().capitalize()} PM2.5 cuma {pm25} µg/m³. {rw().upper()} bisa olahraga outdoor!"
-    elif aqi <= 100:
-        p4 = f"Kualitas udara {aqi_status.lower()} nih, AQI {aqi}. {rw().capitalize()} PM2.5 {pm25} µg/m³. {rw().upper()} masih oke sih buat aktivitas biasa {rw()}."
-    elif aqi <= 150:
-        p4 = f"Waduh {rw()}, kualitas udara {aqi_status.lower()} buat yang sensitif. AQI {aqi}, PM2.5 {pm25} µg/m³. {rw().capitalize()} better pake masker kalo keluar rumah ya guys!"
-    else:
-        p4 = f"{rw().upper()}! Kualitas udara {aqi_status.lower()} banget nih! AQI {aqi}, PM2.5 {pm25} µg/m³. {rw().capitalize()} better stay inside aja {rw()}."
-
-    # Prakiraan besok
-    temp_diff = abs(temp_next - temp)
-    if temp_next > temp + 2:
-        p5 = f"Besok {rw()} bakal lebih panas lagi, {int(temp_next)}°C. {rw().capitalize()} siap-siap aja ya, basically kayak di oven {rw()}!"
-    elif temp_next < temp - 2:
-        p5 = f"Besok {rw()} bakal lebih adem, {int(temp_next)}°C. {rw().capitalize()} enak nih buat rebahan {rw()}!"
-    else:
-        p5 = f"Besok {rw()} suhunya masih mirip-mirip, {int(temp_next)}°C. {rw().capitalize()} stabil {rw()}."
-
-    if precip_next > 5:
-        p5 += f" Tapi {rw()} siap-siap ujan deres besok, {int(precip_next)} mm. {rw().capitalize()} jangan lupa payung!"
-    elif precip_next > 1:
-        p5 += f" Besok {rw()} bakal ujan-ujanan dikit sih, {int(precip_next)} mm. {rw().capitalize()} aman {rw()}."
-    else:
-        p5 += f" Besok {rw()} diprediksi no hujan. {rw().capitalize()} cerah!"
-
-    # UV besok
-    if uv_next > 8:
-        p5 += f" UV besok {rw()} juga tinggi {uv_next:.1f}. {rw().capitalize()} stay safe ya guys!"
-    
-    # Gabungin semua
-    result = f"{p1} {p2} {p3} {p4} {p5}"
-    
-    # Tambahin kata Jaksel random biar makin keren
-    closings = ["Stay safe guys!", "Jangan lupa minum!", "Peace!", "Santuy aja!", "Chill!", "No worries!", "You got this!"]
-    result += f" {random.choice(closings)} ~Ashley {rw()} 🤙"
-    
-    return result
-
 def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str = None):
-    """Fallback standar (Indonesia formal)"""
     temp = weather.get("temperature", 0)
     feels_like = weather.get("feels_like", 0)
     humidity = weather.get("humidity", 0)
@@ -1214,7 +1102,7 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
         elif wind > 5:
             p2 = f" Sepanjang hari tidak ada hujan. Angin bertiup sepoi-sepoi dengan kecepatan {int(wind)} km/jam, sangat nyaman untuk aktivitas luar."
         else:
-            p2 = f" Langit cerah tanpa hujan. Angin hampir tidak terasa ({int(wind)} km/jam), membuat udara terasa sedikit pengap terutama di daerah padat."
+            p2 = f" Langit cerih tanpa hujan. Angin hampir tidak terasa ({int(wind)} km/jam), membuat udara terasa sedikit pengap terutama di daerah padat."
 
     if uv > 10:
         uv_part = f" Indeks UV sangat ekstrim ({uv:.1f})! Paparan sinar matahari langsung bisa membakar kulit dalam 10 menit."
@@ -1264,10 +1152,10 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
     return f"{p1}{p2} {p3} {p4}"
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
-    """Get AI insights using Gemini with automatic key rotation - Style Jaksel!"""
+    """Get AI insights using Gemini with automatic key rotation"""
     if not AI_AVAILABLE or gemini_rotator is None:
-        print("⚠️ AI tidak tersedia, menggunakan fallback Jaksel")
-        return get_ai_insights_jaksel(weather, forecast, air_quality, location_name)
+        print("⚠️ AI tidak tersedia, menggunakan fallback")
+        return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
     location = location_name or "Lokasi Anda"
     temp = weather.get("temperature", 0)
@@ -1293,67 +1181,54 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
             f"hujan {int(day['precipitation'])}mm, UV {day['uv_index']:.1f}"
         )
     forecast_text = "\n".join(forecast_summary)
+    prompt = f"""Anda adalah meteorolog profesional. Tugas Anda adalah menulis analisis cuaca dalam BAHASA INDONESIA berbentuk PARAGRAF MENGALIR sepanjang TEPAT 100 hingga 150 kata. Jangan kurang dari 100 kata. Jangan lebih dari 150 kata.
 
-    # PROMPT BAHASA JAKSEL YANG KEREN!
-    prompt = f"""Lu adalah Ashley, asisten cuaca yang super chill dan gaul banget. Lagi ngobrol santai sama temen-temen di kafe Jaksel. Gaya bicara lu campuran Indonesia-Inggris, pake kata-kata kayak "literally", "basically", "like", "guys", "vibes", "makes sense", "for real", "you know", "actually", "honestly", "though", "kinda", "pretty much", "I mean", "so yeah", "anyway".
-
-BUAT ANALISIS CUACA UNTUK {location} DENGAN DATA DI BAWAH INI:
-
-DATA CUACA SEKARANG:
-- Suhu: {int(temp)}°C (tapi rasanya {int(feels_like)}°C)
+DATA CUACA SAAT INI DI {location.upper()}:
+- Suhu: {int(temp)}°C (terasa seperti {int(feels_like)}°C)
 - Kondisi: {condition}
 - Kelembaban: {int(humidity)}%
 - Curah hujan: {precip:.1f} mm
-- Angin: {int(wind)} km/jam
-- Tekanan: {int(pressure)} hPa
-- UV: {uv:.1f}
+- Kecepatan angin: {int(wind)} km/jam
+- Tekanan udara: {int(pressure)} hPa
+- Indeks UV: {uv:.1f}
 
 KUALITAS UDARA:
-- AQI: {aqi} ({aqi_status})
+- Indeks AQI: {aqi} ({aqi_status})
 - PM2.5: {pm25} µg/m³
 - PM10: {pm10} µg/m³
 
-PRAKIRAAN 3 HARI:
+PRAKIRAAN 3 HARI KE DEPAN:
 {forecast_text}
 
-RULES:
-1. TULISAN PANJANG 100-150 KATA (jangan pendek-pendek amat!)
-2. Bahasa Jaksel yang natural, kayak lagi nongkrong
-3. Pake minimal 8-10 kata Jaksel yang keren
-4. Include info kualitas udara dan UV
-5. Kasih prakiraan buat besok
-6. Akhiri dengan signature "~Ashley 🤙"
-7. JANGAN pake bullet points, buat paragraf yang mengalir
-8. JANGAN terlalu formal, be creative and have fun!
+INSTRUKSI WAJIB:
+- Tulis dalam satu atau dua paragraf yang mengalir alami, BUKAN bullet points
+- Bahas kondisi cuaca sekarang, kualitas udara, dan prakiraan besok
+- Sertakan rekomendasi aktivitas yang sesuai
+- Jangan gunakan emoji, tanda bintang, atau format markdown
+- PANJANG WAJIB: 100–150 kata (hitung dengan cermat sebelum selesai)
 
-CONTOH GAYA YANG BENAR:
-"Halo guys! Cuaca di Jaksel sore ini literally panas banget. Suhunya 32°C tapi rasanya kayak 36°C because humidity-nya 75%. Basically gerah banget, like for real. Angin juga barely ada, cuma 8 km/jam, jadi less serves buat nyegerin. UV hari ini juga 9 guys, literally bisa bikin item dalam 10 menit. Better pake sunscreen kalo mau keluar. Good news-nya kualitas udara lumayan oke sih, AQI cuma 45, jadi masih aman buat olahraga atau hangout outdoor. Besok suhu bakal turun dikit jadi 30°C, vibes-nya lebih adem gitu. Tapi siap-siap ya, soalnya sore bakal ujan rintik-rintik literally. Jangan lupa bawa payung guys, nanti keujanan di jalan repot. ~Ashley 🤙"
-
-OK LET'S GO! MULAI NULIS DENGAN GAYA JAKSEL YANG KEREN:"""
+HASIL ANALISIS ({location}):"""
 
     try:
+        # Gunakan model yang lebih stabil dengan kuota lebih besar
         insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
         
         if insights:
             print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
             
             word_count = len(insights.split())
-            if word_count < 30 or word_count > 300:
-                print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback Jaksel")
-                return get_ai_insights_jaksel(weather, forecast, air_quality, location_name)
-            
-            # Cek apakah response mengandung signature ~Ashley, kalo ga ada tambahin
-            if "~Ashley" not in insights:
-                insights += " ~Ashley 🤙"
+            if word_count < 80 or word_count > 250:
+                print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
+                return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
             
             return insights
         else:
-            print("⚠️ Gemini returned None, menggunakan fallback Jaksel")
-            return get_ai_insights_jaksel(weather, forecast, air_quality, location_name)
+            print("⚠️ Gemini returned None, menggunakan fallback")
+            return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
             
     except Exception as e:
         print(f"❌ Gemini API error: {e}")
-        return get_ai_insights_jaksel(weather, forecast, air_quality, location_name)
+        return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
 # ============ ENDPOINT CEK STATUS API KEY ============
 @app.get("/api-key-status")
@@ -2520,9 +2395,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </script>
 </body>
 </html>"""
-    return html_content
-
-# ============ ROUTE HOME ============
+    return html_content# ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     global selected_location
