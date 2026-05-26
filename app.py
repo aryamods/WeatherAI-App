@@ -143,8 +143,8 @@ class GeminiRotator:
                     model=model,
                     contents=prompt,
                     config={
-                        'temperature': 0.9,
-                        'max_output_tokens': 1500,
+                        'temperature': 0.8,
+                        'max_output_tokens': 2000,
                     }
                 )
                 
@@ -1181,43 +1181,48 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
             f"hujan {int(day['precipitation'])}mm, UV {day['uv_index']:.1f}"
         )
     forecast_text = "\n".join(forecast_summary)
-    prompt = f"""Anda adalah meteorolog profesional. Tugas Anda adalah menulis analisis cuaca dalam BAHASA INDONESIA berbentuk PARAGRAF MENGALIR sepanjang TEPAT 100 hingga 150 kata. Jangan kurang dari 100 kata. Jangan lebih dari 150 kata.
+    
+    # PROMPT YANG LEBIH TEGAS DENGAN CONTOH
+    prompt = f"""Anda adalah meteorolog profesional. Tulis analisis cuaca dalam BAHASA INDONESIA.
 
-DATA CUACA SAAT INI DI {location.upper()}:
-- Suhu: {int(temp)}°C (terasa seperti {int(feels_like)}°C)
+DATA CUACA DI {location.upper()}:
+- Suhu: {int(temp)}°C (terasa {int(feels_like)}°C)
 - Kondisi: {condition}
 - Kelembaban: {int(humidity)}%
 - Curah hujan: {precip:.1f} mm
-- Kecepatan angin: {int(wind)} km/jam
-- Tekanan udara: {int(pressure)} hPa
-- Indeks UV: {uv:.1f}
+- Angin: {int(wind)} km/jam
+- Tekanan: {int(pressure)} hPa
+- UV: {uv:.1f}
 
 KUALITAS UDARA:
-- Indeks AQI: {aqi} ({aqi_status})
+- AQI: {aqi} ({aqi_status})
 - PM2.5: {pm25} µg/m³
 - PM10: {pm10} µg/m³
 
-PRAKIRAAN 3 HARI KE DEPAN:
+PRAKIRAAN 3 HARI:
 {forecast_text}
 
-INSTRUKSI WAJIB:
-- Tulis dalam satu atau dua paragraf yang mengalir alami, BUKAN bullet points
-- Bahas kondisi cuaca sekarang, kualitas udara, dan prakiraan besok
-- Sertakan rekomendasi aktivitas yang sesuai
-- Jangan gunakan emoji, tanda bintang, atau format markdown
-- PANJANG WAJIB: 100–150 kata (hitung dengan cermat sebelum selesai)
+CONTOH OUTPUT YANG BENAR (panjang ~120 kata):
+"Saat ini di Jakarta, suhu terasa cukup panas mencapai 32°C meskipun termometer menunjukkan 30°C, karena kelembaban tinggi 78%. Langit cerah dengan indeks UV sangat tinggi 9, disarankan menggunakan tabir surya jika beraktivitas di luar. Kualitas udara hari ini tergolong sedang dengan AQI 85, masih aman namun penderita asma perlu berhati-hati. Angin bertiup pelan 8 km/jam, tidak mengganggu. Untuk besok, diprediksi suhu maksimal 31°C dengan potensi hujan ringan di sore hari. Kondisi ini cukup umum terjadi di musim pancaroba. Kami sarankan Anda tetap membawa payung dan minum air yang cukup untuk menghindari dehidrasi. Secara keseluruhan, cuaca hari ini cukup bersahabat untuk aktivitas luar ruangan, namun tetap waspada terhadap paparan sinar UV yang tinggi."
 
-HASIL ANALISIS ({location}):"""
+INSTRUKSI:
+1. TULIS dalam SATU PARAGRAF yang mengalir alami
+2. PANJANG 120-150 kata (WAJIB!)
+3. JANGAN gunakan emoji, bullet points, atau markdown
+4. JANGAN ulangi data mentah, tapi jelaskan dalam kalimat natural
+5. Sertakan 1-2 rekomendasi spesifik
+
+HASIL ANALISIS UNTUK {location.upper()}:"""
 
     try:
-        # Gunakan model yang lebih stabil dengan kuota lebih besar
         insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
         
         if insights:
-            print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
-            
             word_count = len(insights.split())
-            if word_count < 90 or word_count > 180:
+            print(f"✅ Gemini response received (panjang: {word_count} kata)")
+            
+            # Lebih longgar, dari 90-180 kata
+            if word_count < 80 or word_count > 200:
                 print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
                 return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
             
