@@ -1225,6 +1225,13 @@ HASIL ANALISIS UNTUK {location.upper()}:"""
         insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
         
         if insights:
+            insights = insights.replace('*', '')
+            insights = insights.replace('_', '')
+            insights = insights.replace('`', '')
+            insights = insights.replace('#', '')
+            
+            import re
+            insights = re.sub(r'\s+', ' ', insights).strip()
             word_count = len(insights.split())
             print(f"✅ Gemini response received (panjang: {word_count} kata) - Bahasa Jaksel Natural")
             
