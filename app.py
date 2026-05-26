@@ -117,7 +117,7 @@ class GeminiRotator:
             
             return min(available, key=lambda x: x['used_today'])
     
-    def call_api(self, prompt, model="gemini-2.0-flash", max_retries=3):
+    def call_api(self, prompt, model="gemini-2.5-flash", max_retries=3):
         """
         Panggil Gemini API dengan rotasi key dan retry logic
         """
@@ -143,8 +143,8 @@ class GeminiRotator:
                     model=model,
                     contents=prompt,
                     config={
-                        'temperature': 0.7,
-                        'max_output_tokens': 1024,
+                        'temperature': 0.9,
+                        'max_output_tokens': 1500,
                     }
                 )
                 
@@ -215,7 +215,7 @@ try:
         # Jangan test call di startup untuk hemat kuota!
         AI_AVAILABLE = True
         print(f"\033[92mINFO\033[0m:     Gemini AI siap digunakan dengan {len(api_keys)} API keys")
-        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-2.0-flash")
+        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-2.5-flash")
     else:
         print("\033[93mWARNING\033[0m: Tidak ada API key yang dikonfigurasi")
         
@@ -1211,13 +1211,13 @@ HASIL ANALISIS ({location}):"""
 
     try:
         # Gunakan model yang lebih stabil dengan kuota lebih besar
-        insights = gemini_rotator.call_api(prompt, model="gemini-2.0-flash", max_retries=3)
+        insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
         
         if insights:
             print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
             
             word_count = len(insights.split())
-            if word_count < 80 or word_count > 250:
+            if word_count < 90 or word_count > 180:
                 print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
                 return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
             
