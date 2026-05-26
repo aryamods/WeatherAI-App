@@ -129,13 +129,13 @@ class GeminiRotator:
                     time.sleep(5)
                     continue
                 else:
-                    print("❌ Tidak ada API key yang tersedia")
+                    print("INFO:    Tidak ada API key yang tersedia")
                     return None
             
             try:
                 from google import genai
                 
-                print(f"📡 Menggunakan {key_info['account']} (used: {key_info['used_today']}/{self.daily_limit})")
+                print(f"INFO:    Menggunakan {key_info['account']} (used: {key_info['used_today']}/{self.daily_limit})")
                 
                 client = genai.Client(api_key=key_info['key'])
                 
@@ -1055,8 +1055,7 @@ class WeatherImageClassifier:
 
 weather_image_classifier = WeatherImageClassifier()
 
-def get_ai_insights_fallback_jaksel(weather, forecast, air_quality, location_name: str = None):
-    """Fallback analysis with natural Bahasa Jaksel style - when Gemini is unavailable"""
+def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str = None):
     temp = weather.get("temperature", 0)
     feels_like = weather.get("feels_like", 0)
     humidity = weather.get("humidity", 0)
@@ -1074,92 +1073,89 @@ def get_ai_insights_fallback_jaksel(weather, forecast, air_quality, location_nam
     condition = get_condition_text(weather_code).lower()
     location = location_name or "Lokasi Anda"
 
-    # Weather condition paragraph (natural Jaksel style)
-    if condition == "cerah":
-        p1 = f"Cuaca di {location} hari ini cerah. Suhu {int(temp)}°C, though karena kelembaban {int(humidity)}%, rasanya seperti {int(feels_like)}°C. "
-    elif condition == "berawan":
-        p1 = f"Cuaca di {location} hari ini berawan. Suhu sekitar {int(temp)}°C, tapi feels like {int(feels_like)}°C karena kelembaban {int(humidity)}%. "
-    elif condition == "sebagian cerah":
-        p1 = f"Cuaca di {location} cerah berawan. Suhu {int(temp)}°C terasa seperti {int(feels_like)}°C. "
-    elif "hujan" in condition:
-        p1 = f"Hujan {condition} sedang berlangsung di {location}. Suhu turun menjadi {int(temp)}°C dengan kelembaban {int(humidity)}%, udara terasa lebih dingin yaitu {int(feels_like)}°C. "
-    elif "kabut" in condition or weather_code == 45:
-        p1 = f"Kabut menyelimuti {location} pagi ini dengan suhu {int(temp)}°C. Jarak pandang mungkin berkurang. "
-    else:
-        p1 = f"Cuaca {location} hari ini {condition} dengan suhu {int(temp)}°C. Kelembaban {int(humidity)}% membuat suhu terasa {int(feels_like)}°C. "
-
-    # Precipitation and wind paragraph
-    if precip > 5:
-        p2 = f"Curah hujan mencapai {precip:.1f} mm dalam 24 jam terakhir. Angin bertiup dengan kecepatan {int(wind)} km/jam. "
-    elif precip > 1:
-        p2 = f"Hujan ringan tercatat {precip:.1f} mm. Angin bertiup sekitar {int(wind)} km/jam. "
-    elif precip > 0:
-        p2 = f"Ada gerimis tipis dengan curah {precip:.1f} mm. Angin bertiup {int(wind)} km/jam. "
-    else:
-        if wind > 15:
-            p2 = f"Tidak ada hujan. Angin cukup kencang {int(wind)} km/jam, udara terasa lebih segar. "
-        elif wind > 5:
-            p2 = f"Sepanjang hari tidak ada hujan. Angin bertiup {int(wind)} km/jam. "
-        else:
-            p2 = f"Langit cerah tanpa hujan. Angin hampir tidak terasa ({int(wind)} km/jam). "
-
-    # UV paragraph
-    if uv > 10:
-        uv_part = f"Indeks UV sangat ekstrim ({uv:.1f}). Paparan sinar matahari langsung bisa membakar kulit dalam 10 menit. "
-    elif uv > 8:
-        uv_part = f"Indeks UV sangat tinggi ({uv:.1f}), so sunscreen itu perlu. "
-    elif uv > 6:
-        uv_part = f"Indeks UV tinggi ({uv:.1f}), though masih aman dengan perlindungan. "
-    elif uv > 3:
-        uv_part = f"Indeks UV sedang ({uv:.1f}). "
-    else:
-        uv_part = f"Indeks UV rendah ({uv:.1f}). "
-
-    # Air quality paragraph (natural style)
-    if aqi <= 50:
-        aqi_part = f"Kualitas udara masuk kategori baik dengan AQI {aqi}. PM2.5 {pm25} µg/m³ dan PM10 {pm10} µg/m³, still within safe limits. "
-    elif aqi <= 100:
-        aqi_part = f"Kualitas udara kategori sedang (AQI {aqi}). Basically masih aman, though buat yang sensitif might want to kurangi aktivitas luar. "
-    elif aqi <= 150:
-        aqi_part = f"Kualitas udara tidak sehat untuk kelompok sensitif (AQI {aqi}). PM2.5 {pm25} µg/m³, jadi disarankan pakai masker. "
-    elif aqi <= 200:
-        aqi_part = f"Kualitas udara tidak sehat (AQI {aqi}) dengan PM2.5 {pm25} µg/m³. Sebaiknya kurangi aktivitas luar ruangan. "
-    else:
-        aqi_part = f"Kualitas udara berbahaya (AQI {aqi}) - segera cari perlindungan di dalam ruangan. "
-
-    # Forecast trend paragraph
     temps_next_days = [d["temp_max"] for d in forecast[:3]]
     max_temp_next = max(temps_next_days) if temps_next_days else temp
     min_temp_next = min([d["temp_min"] for d in forecast[:3]]) if temps_next_days else temp
 
-    if max_temp_next > temp + 4:
-        trend = f"Untuk 3 hari ke depan, suhu diprediksi naik hingga {int(max_temp_next)}°C. "
-    elif max_temp_next > temp + 2:
-        trend = f"Suhu diperkirakan naik bertahap hingga {int(max_temp_next)}°C. "
-    elif max_temp_next < temp - 2:
-        trend = f"Ada penurunan suhu hingga {int(min_temp_next)}°C dalam beberapa hari ke depan. "
+    if condition == "cerah":
+        p1 = f"Langit {location} sedang cerah tanpa awan berarti. Suhu saat ini {int(temp)}°C, namun karena kelembaban {int(humidity)}%, udara terasa lebih hangat yaitu {int(feels_like)}°C. Ini adalah cuaca yang cukup khas untuk wilayah ini."
+    elif condition == "berawan":
+        p1 = f"Hari ini {location} diliputi awan dengan suhu {int(temp)}°C. Rasa panasnya mencapai {int(feels_like)}°C karena kelembaban yang cukup tinggi ({int(humidity)}%). Meski berawan, sinar UV tetap bisa menembus awan."
+    elif condition == "sebagian cerah":
+        p1 = f"Cuaca di {location} cerah berawan, kombinasi antara sinar matahari dan awan tipis. Suhu udara {int(temp)}°C terasa seperti {int(feels_like)}°C. Kondisi ini sering terjadi di musim pancaroba."
+    elif "hujan" in condition:
+        p1 = f"Hujan {condition} sedang berlangsung di {location}. Suhu turun menjadi {int(temp)}°C dengan kelembaban mencapai {int(humidity)}%, membuat udara terasa lembab dan dingin seperti {int(feels_like)}°C."
+    elif "kabut" in condition or weather_code == 45:
+        p1 = f"Kabut menyelimuti {location} pagi ini dengan suhu {int(temp)}°C. Jarak pandang mungkin berkurang, jadi hati-hati jika berkendara. Kabut biasanya akan berkurang setelah jam 9 pagi."
     else:
-        trend = f"Suhu dalam 3-5 hari ke depan cenderung stabil di kisaran {int(temp-1)}-{int(temp+2)}°C. "
+        p1 = f" Cuaca {location} hari ini {condition} dengan suhu {int(temp)}°C. Kelembaban {int(humidity)}% membuat suhu terasa {int(feels_like)}°C. Tekanan udara tercatat {int(pressure)} hPa."
 
-    # Rain forecast
+    if precip > 5:
+        p2 = f" Dalam 24 jam terakhir, tercurah hujan lebat mencapai {precip:.1f} mm. Jalanan mungkin tergenang di beberapa titik. Angin bertiup dengan kecepatan {int(wind)} km/jam, cukup kencang dan mempercepat penguapan."
+    elif precip > 1:
+        p2 = f" Tercatat hujan ringan sebesar {precip:.1f} mm. Tidak terlalu mengganggu, namun tetap waspada karena permukaan jalan bisa licin. Angin bertiup sekitar {int(wind)} km/jam, masih tergolong normal."
+    elif precip > 0:
+        p2 = f" Ada gerimis tipis dengan curah hanya {precip:.1f} mm. Hampir tidak terasa. Angin bertiup pelan {int(wind)} km/jam, memberikan sirkulasi udara yang nyaman."
+    else:
+        if wind > 15:
+            p2 = f" Tidak ada hujan yang tercatat. Angin bertiup cukup kencang {int(wind)} km/jam, membuat udara terasa lebih segar meski suhu cukup hangat."
+        elif wind > 5:
+            p2 = f" Sepanjang hari tidak ada hujan. Angin bertiup sepoi-sepoi dengan kecepatan {int(wind)} km/jam, sangat nyaman untuk aktivitas luar."
+        else:
+            p2 = f" Langit cerih tanpa hujan. Angin hampir tidak terasa ({int(wind)} km/jam), membuat udara terasa sedikit pengap terutama di daerah padat."
+
+    if uv > 10:
+        uv_part = f" Indeks UV sangat ekstrim ({uv:.1f})! Paparan sinar matahari langsung bisa membakar kulit dalam 10 menit."
+    elif uv > 8:
+        uv_part = f" Indeks UV sangat tinggi ({uv:.1f}). Gunakan tabir surya SPF 30+ jika beraktivitas di luar."
+    elif uv > 6:
+        uv_part = f" Indeks UV tinggi ({uv:.1f}). Meski tidak ekstrem, perlindungan tetap disarankan."
+    elif uv > 3:
+        uv_part = f" Indeks UV sedang ({uv:.1f}). Masih aman untuk beraktivitas normal."
+    else:
+        uv_part = f" Indeks UV rendah ({uv:.1f}). Sinar matahari tidak terlalu berbahaya saat ini."
+
+    if aqi <= 50:
+        aqi_part = f" Kabar baik! Kualitas udara di {location} masuk kategori BAIK dengan AQI {aqi}. Partikel halus PM2.5 tercatat {pm25} µg/m³ dan PM10 {pm10} µg/m³, masih di bawah batas aman WHO. Udara segar dan cocok untuk olahraga luar ruangan."
+    elif aqi <= 100:
+        aqi_part = f" Kualitas udara masuk kategori SEDANG (AQI {aqi}). PM2.5 {pm25} µg/m³ dan PM10 {pm10} µg/m³. Masih aman untuk umum, namun penderita asma atau alergi sebaiknya tidak beraktivitas berat di luar terlalu lama."
+    elif aqi <= 150:
+        aqi_part = f" Perlu perhatian! Kualitas udara TIDAK SEHAT untuk kelompok sensitif (AQI {aqi}). PM2.5 mencapai {pm25} µg/m³ yang bisa memicu iritasi saluran napas. Kelompok rentan seperti anak-anak, lansia, dan penderita penyakit paru-paru disarankan menggunakan masker saat keluar rumah."
+    elif aqi <= 200:
+        aqi_part = f" Peringatan! Kualitas udara TIDAK SEHAT (AQI {aqi}) dengan PM2.5 {pm25} µg/m³. Semua orang disarankan mengurangi aktivitas luar ruangan. Tutup jendela rumah dan gunakan penyaring udara jika tersedia."
+    elif aqi <= 300:
+        aqi_part = f" Kondisi darurat! Kualitas udara SANGAT TIDAK SEHAT (AQI {aqi}). PM2.5 {pm25} µg/m³ sangat berbahaya bagi kesehatan. Hindari keluar rumah, gunakan masker N95 jika terpaksa."
+    else:
+        aqi_part = f" BAHAYA! Kualitas udara BERBAHAYA (AQI {aqi}). Segera cari perlindungan di dalam ruangan dengan filtrasi udara yang baik. Ikuti arahan dari otoritas setempat."
+
+    p3 = f"{uv_part}{aqi_part}"
+
+    if max_temp_next > temp + 4:
+        trend = f" Dalam 3 hari ke depan, suhu diprediksi akan MELONJAK hingga {int(max_temp_next)}°C, bahkan lebih panas dari hari ini."
+    elif max_temp_next > temp + 2:
+        trend = f" Suhu diperkirakan akan naik bertahap hingga mencapai {int(max_temp_next)}°C dalam beberapa hari ke depan."
+    elif max_temp_next < temp - 2:
+        trend = f" Ada penurunan suhu cukup signifikan hingga {int(min_temp_next)}°C dalam beberapa hari ke depan. Siapkan jaket atau selimut tambahan."
+    else:
+        trend = f" Suhu dalam 3-5 hari ke depan cenderung stabil di kisaran {int(temp-1)}-{int(temp+2)}°C, tidak banyak perubahan ekstrem."
+
     rainy_days = [d for d in forecast[:3] if d.get("precipitation", 0) > 5]
     if rainy_days:
-        p4 = f"{trend}Waspada potensi hujan lebat di hari {', '.join([d['day'] for d in rainy_days[:2]])}. Better bawa payung."
+        p4 = f"{trend} Waspada potensi hujan sedang hingga lebat pada hari {', '.join([d['day'] for d in rainy_days[:2]])}. Bawa payung atau jas hujan jika bepergian."
     elif any(d.get("precipitation", 0) > 2 for d in forecast[:3]):
         light_rain_days = [d["day"] for d in forecast[:3] if 2 < d.get("precipitation", 0) <= 5]
         if light_rain_days:
-            p4 = f"{trend}Ada kemungkinan hujan ringan di hari {', '.join(light_rain_days[:2])}. Just in case, sedia payung."
+            p4 = f"{trend} Ada kemungkinan gerimis atau hujan ringan pada hari {', '.join(light_rain_days[:2])}. Tidak terlalu mengganggu, tapi tetap sedia payung lipat."
     else:
-        p4 = f"{trend}Diprediksi tidak ada hujan signifikan dalam 3 hari ke depan, cocok untuk kegiatan luar ruangan."
+        p4 = f"{trend} Diprediksi tidak ada hujan signifikan dalam 3 hari ke depan, cocok untuk merencanakan kegiatan luar ruangan."
 
-    return p1 + p2 + uv_part + aqi_part + p4
-
+    return f"{p1}{p2} {p3} {p4}"
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
-    """Get AI insights using Gemini with automatic key rotation - Bahasa Jaksel Natural Edition"""
+    """Get AI insights using Gemini with automatic key rotation"""
     if not AI_AVAILABLE or gemini_rotator is None:
-        print("⚠️ AI tidak tersedia, menggunakan fallback")
-        return get_ai_insights_fallback_jaksel(weather, forecast, air_quality, location_name)
+        print("INFO:    AI tidak tersedia, menggunakan fallback")
+        return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
     location = location_name or "Lokasi Anda"
     temp = weather.get("temperature", 0)
@@ -1186,8 +1182,8 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
         )
     forecast_text = "\n".join(forecast_summary)
     
-    # PROMPT BAHASA JAKSEL NATURAL - SANTAI, TIDAK ALAY, TETAP PROFESIONAL
-    prompt = f"""Kamu adalah meteorolog profesional yang sedang menulis analisis cuaca dengan gaya santai khas Jakarta Selatan. Tulis dalam BAHASA INDONESIA dengan sedikit campuran kata gaul Jaksel yang NATURAL dan TIDAK BERLEBIHAN.
+    # PROMPT YANG LEBIH TEGAS DENGAN CONTOH
+    prompt = f"""Anda adalah meteorolog profesional. Tulis analisis cuaca dalam BAHASA INDONESIA.
 
 DATA CUACA DI {location.upper()}:
 - Suhu: {int(temp)}°C (terasa {int(feels_like)}°C)
@@ -1206,18 +1202,15 @@ KUALITAS UDARA:
 PRAKIRAAN 3 HARI:
 {forecast_text}
 
-CONTOH GAYA YANG BENAR (natural, tidak alay):
-"Cuaca di Jakarta hari ini cukup panas. Suhu tercatat 32°C, tapi rasanya bisa sampai 35°C karena kelembaban yang cukup tinggi, 85%. Jadi, better stay hydrated. Indeks UV juga cukup tinggi di angka 9, so sunscreen itu perlu. Untuk kualitas udara, basically masih aman dengan AQI 65, though buat yang punya sensitivitas pernapasan, might want to pakai masker kalo keluar. Besok diprediksi bakal ujan ringan, so just bring an umbrella aja."
+CONTOH OUTPUT YANG BENAR (panjang ~120 kata):
+"Saat ini di Jakarta, suhu terasa cukup panas mencapai 32°C meskipun termometer menunjukkan 30°C, karena kelembaban tinggi 78%. Langit cerah dengan indeks UV sangat tinggi 9, disarankan menggunakan tabir surya jika beraktivitas di luar. Kualitas udara hari ini tergolong sedang dengan AQI 85, masih aman namun penderita asma perlu berhati-hati. Angin bertiup pelan 8 km/jam, tidak mengganggu. Untuk besok, diprediksi suhu maksimal 31°C dengan potensi hujan ringan di sore hari. Kondisi ini cukup umum terjadi di musim pancaroba. Kami sarankan Anda tetap membawa payung dan minum air yang cukup untuk menghindari dehidrasi. Secara keseluruhan, cuaca hari ini cukup bersahabat untuk aktivitas luar ruangan, namun tetap waspada terhadap paparan sinar UV yang tinggi."
 
-INSTRUKSI WAJIB:
-1. Gunakan gaya santai khas Jaksel tapi TIDAK ALAY
-2. Kata Jaksel yang boleh digunakan: basically, honestly, literally (maksimal sekali), though, so, kinda, pretty much, better, just
-3. JANGAN gunakan: "guys", "nih", "dong", "sih" berlebihan, "kan?", "ya ampun", "gila"
-4. JANGAN pake kata "literally" lebih dari 1 kali dalam satu paragraf
-5. TULIS dalam 1-2 paragraf yang mengalir natural
-6. PANJANG 100-150 kata
-7. JANGAN pake emoji atau tanda seru berlebihan (maksimal 1 tanda seru)
-8. Tetap informatif dan profesional
+INSTRUKSI:
+1. TULIS dalam SATU PARAGRAF yang mengalir alami
+2. PANJANG 120-150 kata (WAJIB!)
+3. JANGAN gunakan emoji, bullet points, atau markdown
+4. JANGAN ulangi data mentah, tapi jelaskan dalam kalimat natural
+5. Sertakan 1-2 rekomendasi spesifik
 
 HASIL ANALISIS UNTUK {location.upper()}:"""
 
@@ -1225,28 +1218,22 @@ HASIL ANALISIS UNTUK {location.upper()}:"""
         insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
         
         if insights:
-            insights = insights.replace('*', '')
-            insights = insights.replace('_', '')
-            insights = insights.replace('`', '')
-            insights = insights.replace('#', '')
-            
-            import re
-            insights = re.sub(r'\s+', ' ', insights).strip()
             word_count = len(insights.split())
-            print(f"✅ Gemini response received (panjang: {word_count} kata) - Bahasa Jaksel Natural")
+            print(f"INFO:    Gemini response received (panjang: {word_count} kata)")
             
-            if word_count < 80 or word_count > 200:
-                print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
-                return get_ai_insights_fallback_jaksel(weather, forecast, air_quality, location_name)
+            # Lebih longgar, dari 90-180 kata
+            if word_count < 80 or word_count > 160:
+                print(f"INFO:    Response tidak ideal ({word_count} kata), menggunakan fallback")
+                return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
             
             return insights
         else:
-            print("⚠️ Gemini returned None, menggunakan fallback")
-            return get_ai_insights_fallback_jaksel(weather, forecast, air_quality, location_name)
+            print("INFO:    Gemini returned None, menggunakan fallback")
+            return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
             
     except Exception as e:
-        print(f"❌ Gemini API error: {e}")
-        return get_ai_insights_fallback_jaksel(weather, forecast, air_quality, location_name)
+        print(f"INFO:    Gemini API error: {e}")
+        return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
 # ============ ENDPOINT CEK STATUS API KEY ============
 @app.get("/api-key-status")
@@ -2413,9 +2400,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </script>
 </body>
 </html>"""
-    return html_content
-
-# ============ ROUTE HOME ============
+    return html_content# ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     global selected_location
