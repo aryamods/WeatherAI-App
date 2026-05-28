@@ -1898,7 +1898,7 @@ body.dark .notification-close {
     50% { transform: scale(1.2); opacity: 0.7; }
 }
 
-/* Widget Chat */
+/* Widget Chat - INITIAL HIDDEN STATE */
 .chat-widget {
     position: fixed;
     bottom: 170px;
@@ -1916,12 +1916,14 @@ body.dark .notification-close {
     transform: translateY(20px);
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
 }
 
 .chat-widget.open {
     transform: translateY(0);
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 /* Header Chat */
