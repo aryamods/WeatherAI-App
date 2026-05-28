@@ -1082,7 +1082,7 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
         elif wind > 5:
             p2 = f" Sepanjang hari tidak ada hujan. Angin bertiup sepoi-sepoi dengan kecepatan {int(wind)} km/jam, sangat nyaman untuk aktivitas luar."
         else:
-            p2 = f" Langit cerih tanpa hujan. Angin hampir tidak terasa ({int(wind)} km/jam), membuat udara terasa sedikit pengap terutama di daerah padat."
+            p2 = f" Langit cerah tanpa hujan. Angin hampir tidak terasa ({int(wind)} km/jam), membuat udara terasa sedikit pengap terutama di daerah padat."
 
     if uv > 10:
         uv_part = f" Indeks UV sangat ekstrim ({uv:.1f})! Paparan sinar matahari langsung bisa membakar kulit dalam 10 menit."
@@ -1126,6 +1126,8 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
         light_rain_days = [d["day"] for d in forecast[:3] if 2 < d.get("precipitation", 0) <= 5]
         if light_rain_days:
             p4 = f"{trend} Ada kemungkinan gerimis atau hujan ringan pada hari {', '.join(light_rain_days[:2])}. Tidak terlalu mengganggu, tapi tetap sedia payung lipat."
+        else:
+            p4 = f"{trend} Ada sedikit potensi hujan ringan dalam 3 hari ke depan. Tetap sedia payung lipat untuk berjaga-jaga."
     else:
         p4 = f"{trend} Diprediksi tidak ada hujan signifikan dalam 3 hari ke depan, cocok untuk merencanakan kegiatan luar ruangan."
 
@@ -3782,7 +3784,7 @@ async def about_page(request: Request, message: str = None, type: str = None):
     </script>
     """
 
-    return HTMLResponse(content=render_page(content, active="about", saved_locations=saved_locations, message=message, message_type=type))
+    return HTMLResponse(content=render_page(content, active="about", saved_locations=saved_locations, selected_location=selected_location, message=message, message_type=type))
 
 # ============ ROUTE LOCATION ============
 @app.get("/select-location/{location_id}")
@@ -3885,7 +3887,7 @@ async def predict_weather_from_image(file: UploadFile = File(...)):
         return {"success": False, "error": str(e)}
 
 @app.post("/train-image-classifier")
-async def train_image_classifier_route(dataset_path: str):
+async def train_image_classifier_route(dataset_path: str = Form(...)):
     try:
         if not TF_AVAILABLE:
             return {"success": False, "error": "TensorFlow tidak tersedia. Install dengan: pip install tensorflow"}
