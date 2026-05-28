@@ -1958,7 +1958,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </div>
 
     <!-- Live Chat Ashley Widget -->
-    <button class="chat-toggle-btn" id="chatToggleBtn">
+    <button class="chat-toggle-btn" id="chatToggleBtn" onclick="toggleChatWidget()">
         <i class="fas fa-comment-dots"></i>
         <span class="chat-badge"></span>
     </button>
