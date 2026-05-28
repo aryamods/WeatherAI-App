@@ -1910,7 +1910,7 @@ body.dark .notification-close {
     border-radius: 28px;
     border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-xl), 0 10px 40px rgba(0, 0, 0, 0.2);
-    z-index: 199;
+    z-index: 201;
     overflow: hidden;
     transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     transform: translateY(20px);
@@ -2010,7 +2010,7 @@ body.dark .notification-close {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background: var(--bg-tertiary)/0.5;
+    background: var(--bg-tertiary);
 }
 
 /* Custom scroll chat messages */
