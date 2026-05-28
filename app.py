@@ -1410,6 +1410,11 @@ Ada yang mau dicoba? 😊"""
                 reply = f"Saat ini tidak ada hujan di {current_location}. Cuaca cerah, bisa lanjut aktivitas! 😊"
             return {"reply": reply, "detected_location": detected_location}
         
+        # 13. PERTANYAAN UMUM TENTANG ASHLEY
+        elif any(word in user_message_lower for word in ["siapa ashley", "ashley itu siapa", "kamu siapa", "perkenalan"]):
+            reply = f"Halo! Saya Ashley, asisten cuaca pintar di WeatherAI. Saya dibuat untuk membantu Anda mendapatkan informasi cuaca yang akurat, ramah, dan mudah dipahami. Saya bisa menjawab pertanyaan tentang cuaca hari ini, besok, kualitas udara, saran aktivitas, dan masih banyak lagi! Ada yang bisa saya bantu? 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
         # ========== LAYER 3: GEMINI (UNTUK PERTANYAAN KOMPLEKS) ==========
         else:
             try:
@@ -1712,6 +1717,30 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 transform: translate(-50%, -50%) scale(1);
             }}
         }}
+
+        /* Force hide chat widget initially - FIX FOR DEPLOYMENT */
+        .chat-widget {{
+            display: block !important;
+            transform: translateY(20px) !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }}
+        
+        .chat-widget.open {{
+            transform: translateY(0) !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }}
+        
+        .chat-toggle-btn {{
+            display: flex !important;
+            position: fixed !important;
+            bottom: 100px !important;
+            right: 28px !important;
+            z-index: 200 !important;
+        }}
     </style>
 </head>
 <body>
@@ -1956,7 +1985,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </div>
 
     <!-- Live Chat Ashley Widget -->
-    <button class="chat-toggle-btn" id="chatToggleBtn">
+    <button class="chat-toggle-btn" id="chatToggleBtn" onclick="toggleChatWidget()">
         <i class="fas fa-comment-dots"></i>
         <span class="chat-badge"></span>
     </button>
@@ -2662,20 +2691,30 @@ def render_page(content: str, active: str = "home", message: str = None, message
         initImageClassifier();
     }}
 
-    // ============ LIVE CHAT ASHLEY JAVASCRIPT ============
+    // ============ LIVE CHAT ASHLEY JAVASCRIPT (FIXED) ============
     let isChatOpen = false;
     let currentContext = {{
         location: null,
         lastQuery: null
     }};
-    
+
+    // Pastikan widget tersembunyi saat halaman load
+    document.addEventListener('DOMContentLoaded', function() {{
+        const widget = document.getElementById('chatWidget');
+        if (widget) {{
+            widget.classList.remove('open');
+        }}
+    }});
+
     function toggleChatWidget() {{
         const widget = document.getElementById('chatWidget');
         isChatOpen = !isChatOpen;
         
         if (isChatOpen) {{
             widget.classList.add('open');
-            document.getElementById('chatInput').focus();
+            setTimeout(function() {{
+                document.getElementById('chatInput').focus();
+            }}, 100);
         }} else {{
             widget.classList.remove('open');
         }}
@@ -2695,7 +2734,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     function addMessage(text, sender, isTyping = false) {{
         const messagesContainer = document.getElementById('chatMessages');
         const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${{sender}}`;
+        messageDiv.className = `message ${sender}`;
         
         if (isTyping) {{
             messageDiv.innerHTML = `
@@ -2707,7 +2746,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             `;
             messageDiv.id = 'typingIndicator';
         }} else {{
-            messageDiv.innerHTML = `<div class="message-content">${{text}}</div>`;
+            messageDiv.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
         }}
         
         messagesContainer.appendChild(messageDiv);
@@ -2726,7 +2765,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         if (!message) return;
         
-        addMessage(escapeHtml(message), 'user');
+        addMessage(message, 'user');
         input.value = '';
         
         addMessage('', 'bot', true);
@@ -2764,6 +2803,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         return div.innerHTML;
     }}
     
+    // Klik di luar chat untuk menutup
     document.addEventListener('click', function(event) {{
         const widget = document.getElementById('chatWidget');
         const toggleBtn = document.getElementById('chatToggleBtn');
