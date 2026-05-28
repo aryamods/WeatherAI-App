@@ -62,9 +62,6 @@ GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
 # ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
 class GeminiRotator:
     def __init__(self, api_keys):
-        """
-        Inisialisasi rotator untuk multiple API keys
-        """
         self.keys = []
         for i, key in enumerate(api_keys):
             if key:
@@ -80,33 +77,29 @@ class GeminiRotator:
         self.current_index = 0
         self.lock = Lock()
         self.last_reset = time.time()
-        self.daily_limit = 50  # Batas harian per key (free tier biasanya 50-60)
+        self.daily_limit = 50
         
         print(f"\033[92mINFO\033[0m:     Gemini Rotator initialized with {len(self.keys)} API keys")
     
     def _reset_daily_counter(self):
-        """Reset counter harian setiap 24 jam"""
         now = time.time()
-        if now - self.last_reset > 86400:  # 24 jam
+        if now - self.last_reset > 86400:
             for key in self.keys:
                 key['used_today'] = 0
             self.last_reset = now
             print("\033[92mINFO\033[0m:     Daily quota counters reset")
     
     def get_best_key(self):
-        """Pilih API key terbaik berdasarkan usage dan cooldown"""
         with self.lock:
             self._reset_daily_counter()
             now = time.time()
             
-            # Filter key yang tidak dalam cooldown dan belum mencapai limit harian
             available = []
             for key in self.keys:
                 if key['cooldown_until'] <= now and key['used_today'] < self.daily_limit:
                     available.append(key)
             
             if not available:
-                # Jika semua key kena cooldown, cari yang paling cepat selesai
                 if self.keys:
                     min_cooldown = min(k['cooldown_until'] for k in self.keys)
                     wait_time = min_cooldown - now
@@ -118,9 +111,6 @@ class GeminiRotator:
             return min(available, key=lambda x: x['used_today'])
     
     def call_api(self, prompt, model="gemini-2.5-flash", max_retries=3):
-        """
-        Panggil Gemini API dengan rotasi key dan retry logic
-        """
         for attempt in range(max_retries):
             key_info = self.get_best_key()
             
@@ -161,20 +151,17 @@ class GeminiRotator:
                 print(f"⚠️ {key_info['account']} error: {error_msg[:100]}")
                 
                 if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                    # Rate limit, set cooldown
-                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)  # Max 5 menit
+                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)
                     key_info['cooldown_until'] = time.time() + cooldown_time
                     key_info['failures'] += 1
                     print(f"   🔄 Cooldown for {cooldown_time} seconds")
                     
                 elif "quota" in error_msg.lower():
-                    # Quota habis, cooldown lebih lama
-                    key_info['cooldown_until'] = time.time() + 3600  # 1 jam
+                    key_info['cooldown_until'] = time.time() + 3600
                     key_info['failures'] += 1
                     print(f"   ⚠️ Quota exhausted, cooldown 1 hour")
                     
                 else:
-                    # Error lain, cooldown sebentar
                     key_info['cooldown_until'] = time.time() + 10
                 
                 if attempt < max_retries - 1:
@@ -186,7 +173,6 @@ class GeminiRotator:
         return None
     
     def get_status(self):
-        """Dapatkan status semua API keys"""
         status = []
         now = time.time()
         for key in self.keys:
@@ -212,7 +198,6 @@ try:
     
     if api_keys:
         gemini_rotator = GeminiRotator(api_keys)
-        # Jangan test call di startup untuk hemat kuota!
         AI_AVAILABLE = True
         print(f"\033[92mINFO\033[0m:     Gemini AI siap digunakan dengan {len(api_keys)} API keys")
         print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-2.5-flash")
@@ -228,7 +213,6 @@ except Exception as e:
 DB_PATH = "weather.db"
 
 def download_model_from_gdrive():
-    """Download CNN model from Google Drive if not exists"""
     model_path = "weather_cnn_model.keras"
     
     if os.path.exists(model_path):
@@ -345,7 +329,6 @@ init_db()
 TESTIMONIALS_DB_PATH = "testimonials.db"
 
 def init_testimonials_db():
-    """Inisialisasi database untuk testimonial"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -363,7 +346,6 @@ def init_testimonials_db():
     print("\033[92mINFO\033[0m:     Database testimonials initialized")
 
 def save_testimonial(name: str, role: str, comment: str, rating: int):
-    """Menyimpan testimonial ke database"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -374,7 +356,6 @@ def save_testimonial(name: str, role: str, comment: str, rating: int):
     conn.close()
 
 def get_all_testimonials():
-    """Mendapatkan semua testimonial"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, role, comment, rating, created_at FROM testimonials ORDER BY created_at DESC")
@@ -394,7 +375,6 @@ def get_all_testimonials():
     return testimonials
 
 def delete_testimonial_by_id(testimonial_id: int):
-    """Menghapus testimonial berdasarkan ID"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM testimonials WHERE id = ?", (testimonial_id,))
@@ -1152,7 +1132,6 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
     return f"{p1}{p2} {p3} {p4}"
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
-    """Get AI insights using Gemini with automatic key rotation"""
     if not AI_AVAILABLE or gemini_rotator is None:
         print("INFO:    AI tidak tersedia, menggunakan fallback")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
@@ -1182,7 +1161,6 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
         )
     forecast_text = "\n".join(forecast_summary)
     
-    # PROMPT YANG LEBIH TEGAS DENGAN CONTOH
     prompt = f"""Anda adalah meteorolog profesional. Tulis analisis cuaca dalam BAHASA INDONESIA.
 
 DATA CUACA DI {location.upper()}:
@@ -1202,12 +1180,9 @@ KUALITAS UDARA:
 PRAKIRAAN 3 HARI:
 {forecast_text}
 
-CONTOH OUTPUT YANG BENAR (panjang ~120 kata):
-"Saat ini di Jakarta, suhu terasa cukup panas mencapai 32°C meskipun termometer menunjukkan 30°C, karena kelembaban tinggi 78%. Langit cerah dengan indeks UV sangat tinggi 9, disarankan menggunakan tabir surya jika beraktivitas di luar. Kualitas udara hari ini tergolong sedang dengan AQI 85, masih aman namun penderita asma perlu berhati-hati. Angin bertiup pelan 8 km/jam, tidak mengganggu. Untuk besok, diprediksi suhu maksimal 31°C dengan potensi hujan ringan di sore hari. Kondisi ini cukup umum terjadi di musim pancaroba. Kami sarankan Anda tetap membawa payung dan minum air yang cukup untuk menghindari dehidrasi. Secara keseluruhan, cuaca hari ini cukup bersahabat untuk aktivitas luar ruangan, namun tetap waspada terhadap paparan sinar UV yang tinggi."
-
 INSTRUKSI:
 1. TULIS dalam SATU PARAGRAF yang mengalir alami
-2. PANJANG 120-150 kata (WAJIB!)
+2. PANJANG 120-150 kata
 3. JANGAN gunakan emoji, bullet points, atau markdown
 4. JANGAN ulangi data mentah, tapi jelaskan dalam kalimat natural
 5. Sertakan 1-2 rekomendasi spesifik
@@ -1221,7 +1196,6 @@ HASIL ANALISIS UNTUK {location.upper()}:"""
             word_count = len(insights.split())
             print(f"INFO:    Gemini response received (panjang: {word_count} kata)")
             
-            # Lebih longgar, dari 90-180 kata
             if word_count < 80 or word_count > 160:
                 print(f"INFO:    Response tidak ideal ({word_count} kata), menggunakan fallback")
                 return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
@@ -1235,10 +1209,249 @@ HASIL ANALISIS UNTUK {location.upper()}:"""
         print(f"INFO:    Gemini API error: {e}")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
+# ============ LIVE CHAT ASHLEY - CLASS ============
+class AshleyChatbot:
+    def __init__(self):
+        self.context = {
+            "location": None,
+            "last_topic": None,
+            "conversation_history": []
+        }
+    
+    def get_current_context(self):
+        return self.context
+    
+    def update_context(self, location=None, topic=None):
+        if location:
+            self.context["location"] = location
+        if topic:
+            self.context["last_topic"] = topic
+    
+    def process_input(self, user_message: str, current_weather: dict, forecast: list, air_quality: dict, location_name: str):
+        user_message_lower = user_message.lower()
+        
+        # ========== DETEKSI LOKASI ==========
+        locations = ["jakarta", "bandung", "surabaya", "bogor", "semarang", "yogyakarta", 
+                     "denpasar", "makassar", "medan", "palembang", "bekasi", "tangerang", 
+                     "solo", "malang", "padang", "pekanbaru", "manado", "jayapura", "pontianak",
+                     "balikpapan", "banjarmasin", "lampung", "cirebon", "tasikmalaya", "purwokerto"]
+        
+        detected_location = None
+        for loc in locations:
+            if loc in user_message_lower:
+                detected_location = loc.title()
+                self.context["location"] = loc.title()
+                break
+        
+        current_location = self.context["location"] or location_name
+        
+        # ========== LAYER 1: RULE-BASED (GRATIS) ==========
+        
+        # 1. SAPAAN
+        if any(word in user_message_lower for word in ["hai", "halo", "hello", "hey", "assalamualaikum", "pagi", "siang", "sore", "malam"]):
+            greetings = [
+                f"Halo! Senang bertemu Anda. Saya Ashley, asisten cuaca pintar. Ada yang bisa saya bantu tentang cuaca hari ini di {current_location}? 😊",
+                f"Hai! Selamat {'pagi' if 5 <= datetime.now().hour < 11 else 'siang' if 11 <= datetime.now().hour < 15 else 'sore' if 15 <= datetime.now().hour < 18 else 'malam'}! Cuaca hari ini di {current_location} cukup {'panas' if current_weather.get('temperature', 30) > 32 else 'sejuk'} lho. Mau tanya lebih lanjut? ☁️",
+                f"Halo! Saya Ashley siap membantu. Mau tahu prakiraan cuaca di {current_location} hari ini atau besok? 🌤️"
+            ]
+            return {"reply": random.choice(greetings), "detected_location": detected_location}
+        
+        # 2. CUACA HARI INI
+        elif any(word in user_message_lower for word in ["cuaca hari ini", "sekarang", "hari ini", "today", "current", "cuaca sekarang"]):
+            temp = int(current_weather.get("temperature", 0))
+            condition = get_condition_text(current_weather.get("weather_code", 0))
+            humidity = int(current_weather.get("humidity", 0))
+            rain = current_weather.get("precipitation", 0)
+            feels_like = int(current_weather.get("feels_like", 0))
+            
+            if rain > 5:
+                reply = f"Sekarang di {current_location} {condition.lower()} dengan suhu {temp}°C (terasa {feels_like}°C). Sedang hujan cukup lebat ({rain:.0f}mm), jangan lupa bawa payung dan hati-hati di jalan ya! 🌧️"
+            elif rain > 0:
+                reply = f"Hari ini di {current_location} {condition.lower()}, suhu {temp}°C dengan kelembaban {humidity}%. Ada gerimis tipis, aman bawa payung lipat saja. ☂️"
+            else:
+                if temp > 33:
+                    reply = f"Cuaca {current_location} hari ini {condition.lower()} dengan suhu {temp}°C. Wah panas sekali! Jangan lupa minum air putih yang cukup dan gunakan tabir surya ya! 🥵"
+                elif temp < 25:
+                    reply = f"Cuaca {current_location} hari ini {condition.lower()} dengan suhu {temp}°C. Udara terasa dingin, cocok pakai jaket atau sweater! 🧥"
+                else:
+                    reply = f"Cuaca {current_location} hari ini {condition.lower()} dengan suhu {temp}°C. Kelembaban {humidity}%. {'Cocok untuk aktivitas luar ruangan! 🌞' if humidity < 70 else 'Agak lembab, jaga stamina ya! 💪'}"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 3. BESOK
+        elif any(word in user_message_lower for word in ["besok", "tomorrow", "esok", "cuaca besok"]):
+            tomorrow = forecast[1] if len(forecast) > 1 else forecast[0]
+            temp = int(tomorrow["temp_max"])
+            temp_min = int(tomorrow["temp_min"])
+            rain = tomorrow.get("precipitation", 0)
+            condition = get_condition_text(tomorrow.get("weather_code", 0))
+            uv = tomorrow.get("uv_index", 5)
+            
+            if rain > 5:
+                reply = f"Besok di {current_location} diprediksi {condition.lower()} dengan suhu {temp}°C (min {temp_min}°C). Curah hujan cukup tinggi ({rain:.0f}mm). Saya sarankan bawa payung dan jas hujan! ☔"
+            elif rain > 0:
+                reply = f"Besok di {current_location} {condition.lower()}, suhu {temp}°C. Ada potensi gerimis, lebih aman sedia payung. 🌦️"
+            else:
+                if uv > 8:
+                    reply = f"Besok cuaca {current_location} {condition.lower()}, suhu {temp}°C. Indeks UV tinggi ({uv:.0f}), jangan lupa pakai tabir surya! 🌞"
+                else:
+                    reply = f"Besok cuaca {current_location} {condition.lower()}, suhu {temp}°C. Cerah, cocok untuk rencana liburan atau jalan-jalan! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 4. LUSA
+        elif any(word in user_message_lower for word in ["lusa", "day after", "dua hari"]):
+            day_after = forecast[2] if len(forecast) > 2 else forecast[0]
+            temp = int(day_after["temp_max"])
+            rain = day_after.get("precipitation", 0)
+            condition = get_condition_text(day_after.get("weather_code", 0))
+            
+            if rain > 3:
+                reply = f"Lusa di {current_location} {condition.lower()} dengan suhu {temp}°C. Ada hujan, sedia payung ya! ☔"
+            else:
+                reply = f"Lusa di {current_location} {condition.lower()} dengan suhu {temp}°C. {'Cocok untuk aktivitas outdoor! 😊' if rain == 0 else 'Semoga harimu menyenangkan!'}"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 5. PAYUNG / HUJAN
+        elif any(word in user_message_lower for word in ["payung", "butuh payung", "bawa payung", "hujan", "ujian"]):
+            today_rain = current_weather.get("precipitation", 0)
+            tomorrow_rain = forecast[1].get("precipitation", 0) if len(forecast) > 1 else 0
+            day_after_rain = forecast[2].get("precipitation", 0) if len(forecast) > 2 else 0
+            
+            max_rain = max(today_rain, tomorrow_rain, day_after_rain)
+            
+            if max_rain > 5:
+                reply = f"Hmm, dari data cuaca, akan ada hujan dalam beberapa hari ke depan. Saya sarankan bawa payung atau jas hujan ya! ☔"
+            elif max_rain > 0:
+                reply = f"Ada potensi gerimis di {current_location}, lebih aman bawa payung lipat saja. Tidak ada salahnya bersiap! 🌂"
+            else:
+                reply = f"Dalam 3 hari ke depan tidak ada hujan signifikan di {current_location}. Aman tidak bawa payung, tapi tetap sedia tidak ada salahnya! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 6. KUALITAS UDARA
+        elif any(word in user_message_lower for word in ["kualitas udara", "aqi", "polusi", "udara", "pm2", "pm10"]):
+            aqi = air_quality.get("aqi", 0)
+            status = air_quality.get("status", "Baik")
+            pm25 = air_quality.get("pm25", 0)
+            pm10 = air_quality.get("pm10", 0)
+            
+            if aqi <= 50:
+                reply = f"Kualitas udara di {current_location} BAIK (AQI {aqi}). PM2.5 {pm25} µg/m³, PM10 {pm10} µg/m³. Udara segar, cocok untuk olahraga luar ruangan! 🏃"
+            elif aqi <= 100:
+                reply = f"Kualitas udara di {current_location} SEDANG (AQI {aqi}). Masih aman, tapi penderita asma sebaiknya tidak beraktivitas berat terlalu lama. 😷"
+            elif aqi <= 150:
+                reply = f"Perhatian! Kualitas udara di {current_location} TIDAK SEHAT untuk kelompok sensitif (AQI {aqi}). Gunakan masker jika keluar rumah. 😷"
+            else:
+                reply = f"Peringatan! Kualitas udara di {current_location} TIDAK SEHAT (AQI {aqi}). Kurangi aktivitas luar ruangan dan gunakan masker N95! ⚠️"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 7. SUHU / PANAS / DINGIN
+        elif any(word in user_message_lower for word in ["suhu", "panas", "dingin", "temperatur", "berapa derajat"]):
+            temp = int(current_weather.get("temperature", 0))
+            feels_like = int(current_weather.get("feels_like", 0))
+            condition = get_condition_text(current_weather.get("weather_code", 0))
+            
+            if temp > 33:
+                reply = f"Wah panas sekali! Suhu {temp}°C di {current_location}, terasa seperti {feels_like}°C. Jangan lupa minum air putih yang cukup dan pakai tabir surya ya! 🥵"
+            elif temp < 25:
+                reply = f"Udara dingin nih, suhu {temp}°C di {current_location}. Pakai jaket atau sweater biar tidak kedinginan! ☕"
+            else:
+                reply = f"Suhu di {current_location} {temp}°C dengan kondisi {condition.lower()}. Masih nyaman untuk beraktivitas. Nikmati harimu! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 8. FITUR APLIKASI
+        elif any(word in user_message_lower for word in ["cara pakai", "fitur", "gunakan", "simpan lokasi", "bagaimana cara", "gimana caranya"]):
+            reply = """WeatherAI punya banyak fitur keren:
+
+1️⃣ **Cuaca Real-time** - Lihat cuaca hari ini
+2️⃣ **Prakiraan 6 Hari** - Ramalan cuaca ke depan
+3️⃣ **Prediksi ML** - Random Forest prediksi suhu
+4️⃣ **Deteksi Gambar** - Upload foto, aku tebak cuacanya
+5️⃣ **Kualitas Udara** - Cek AQI, PM2.5, PM10
+6️⃣ **Simpan Lokasi** - Klik ⭐ di sidebar untuk simpan kota favorit
+
+Ada yang mau dicoba? 😊"""
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 9. TERIMA KASIH
+        elif any(word in user_message_lower for word in ["terima kasih", "makasih", "thanks", "thank you", "thankyou"]):
+            replies = [
+                "Sama-sama! Senang bisa membantu. Ada pertanyaan lain tentang cuaca? 😊",
+                "Sama-sama! Jangan ragu bertanya lagi ya! ☁️",
+                "Terima kasih kembali! Semoga harimu menyenangkan! ✨"
+            ]
+            return {"reply": random.choice(replies), "detected_location": detected_location}
+        
+        # 10. PERBANDINGAN
+        elif any(word in user_message_lower for word in ["banding", "vs", "lebih", "daripada", "perbandingan"]):
+            reply = f"Saat ini saya hanya bisa memberikan informasi cuaca untuk {current_location}. Coba ganti lokasi dulu di sidebar, atau tanyakan spesifik untuk kota lain ya! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 11. OLAHRAGA / AKTIVITAS
+        elif any(word in user_message_lower for word in ["olahraga", "lari", "jalan", "bersepeda", "renang", "aktivitas"]):
+            temp = int(current_weather.get("temperature", 0))
+            rain = current_weather.get("precipitation", 0)
+            aqi = air_quality.get("aqi", 0)
+            
+            if rain > 2:
+                reply = f"Hari ini di {current_location} sedang hujan, kurang cocok untuk olahraga outdoor. Coba olahraga indoor seperti yoga atau fitness di rumah ya! 🏋️"
+            elif temp > 33:
+                reply = f"Cuaca panas sekali ({temp}°C), tidak disarankan olahraga berat di luar. Bisa coba renang atau olahraga pagi/sore hari! 🏊"
+            elif aqi > 100:
+                reply = f"Kualitas udara sedang kurang baik (AQI {aqi}). Sebaiknya olahraga di dalam ruangan dulu ya! 😷"
+            else:
+                reply = f"Cuaca di {current_location} cocok untuk olahraga! {'Pagi hari lebih sejuk' if temp > 30 else 'Suhu nyaman, bisa lari atau jalan santai'} 🏃"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 12. BERAPA LAMA
+        elif any(word in user_message_lower for word in ["berapa lama", "durasi", "kapan berhenti", "kapan reda"]):
+            rain = current_weather.get("precipitation", 0)
+            if rain > 0:
+                reply = f"Hujan saat ini di {current_location} dengan intensitas {'ringan' if rain < 2 else 'sedang' if rain < 5 else 'lebat'}. Biasanya hujan akan reda dalam 1-2 jam ke depan. Tetap aman ya! 🌧️"
+            else:
+                reply = f"Saat ini tidak ada hujan di {current_location}. Cuaca cerah, bisa lanjut aktivitas! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # ========== LAYER 3: GEMINI (UNTUK PERTANYAAN KOMPLEKS) ==========
+        else:
+            try:
+                if gemini_rotator and AI_AVAILABLE:
+                    prompt = f"""Anda adalah Ashley, asisten cuaca yang ramah dan profesional di aplikasi WeatherAI.
+Pengguna bertanya: "{user_message}"
+Lokasi: {current_location}
+Data cuaca saat ini: {current_weather.get('temperature', 0)}°C, {get_condition_text(current_weather.get('weather_code', 0))}
+Prakiraan besok: {forecast[1]['temp_max'] if len(forecast) > 1 else 0}°C
+Kualitas udara: AQI {air_quality.get('aqi', 0)} ({air_quality.get('status', 'Baik')})
+
+INSTRUKSI PENTING:
+1. Jawab dalam BAHASA INDONESIA yang santai dan natural
+2. Maksimal 2-3 kalimat saja, jangan panjang
+3. Jika pertanyaan di luar topik cuaca, bilang: "Maaf, saya hanya bisa membantu pertanyaan seputar cuaca ya! Coba tanya tentang suhu, hujan, kualitas udara, atau saran aktivitas 😊"
+4. Sertakan emoji yang relevan (☀️, 🌧️, 🌤️, ☁️, 🌂)
+5. JANGAN ulang data mentah, tapi jelaskan dengan bahasa manusia
+
+Jawaban Ashley:"""
+                    
+                    response = gemini_rotator.call_api(prompt, max_retries=2)
+                    if response and len(response) > 10:
+                        return {"reply": response[:500], "detected_location": detected_location}
+                
+                # Fallback jika Gemini gagal
+                replies = [
+                    f"Maaf, saya kurang paham dengan pertanyaan Anda. Coba tanyakan tentang cuaca hari ini, besok, atau kualitas udara di {current_location} ya! 😊",
+                    f"Hmm, saya tidak yakin bisa menjawab itu. Saya lebih ahli di bidang cuaca. Coba tanya tentang suhu, hujan, atau butuh payung tidak? 🌤️",
+                    f"Pertanyaan menarik! Tapi saya khusus untuk membantu masalah cuaca. Ada yang ingin ditanyakan tentang prakiraan cuaca? ☁️"
+                ]
+                return {"reply": random.choice(replies), "detected_location": detected_location}
+                
+            except Exception as e:
+                print(f"Chat error: {e}")
+                return {"reply": f"Maaf, saya sedang sibuk. Coba tanyakan lagi nanti ya! 😊", "detected_location": detected_location}
+
+# Inisialisasi Ashley Chatbot
+ashley_chatbot = AshleyChatbot()
+
 # ============ ENDPOINT CEK STATUS API KEY ============
 @app.get("/api-key-status")
 async def api_key_status():
-    """Endpoint untuk mengecek status semua API keys"""
     if gemini_rotator:
         return {
             "available": AI_AVAILABLE,
@@ -1740,6 +1953,57 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 <p>© 2026 WeatherAI · <a onclick="showModalTim()">Learn More</a></p>
             </div>
         </main>
+    </div>
+
+    <!-- Live Chat Ashley Widget -->
+    <button class="chat-toggle-btn" id="chatToggleBtn">
+        <i class="fas fa-comment-dots"></i>
+        <span class="chat-badge"></span>
+    </button>
+
+    <div class="chat-widget" id="chatWidget">
+        <div class="chat-header" onclick="toggleChatWidget()">
+            <div class="chat-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="chat-title">
+                <span>Ashley - Live Chat</span>
+                <div class="chat-status">
+                    Online · Siap membantu
+                </div>
+            </div>
+            <div class="chat-close" onclick="event.stopPropagation(); closeChatWidget()">
+                <i class="fas fa-times"></i>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-content">
+                    <div class="welcome-message">
+                        <div class="welcome-avatar">☁️</div>
+                        <div class="welcome-text">
+                            <strong>Halo! Saya Ashley</strong><br>
+                            Asisten cuaca pintar Anda. Ada yang bisa saya bantu?
+                        </div>
+                        <div class="welcome-suggestions">
+                            <span class="suggestion-chip" onclick="sendSuggestion('Bagaimana cuaca hari ini?')">🌤️ Cuaca hari ini</span>
+                            <span class="suggestion-chip" onclick="sendSuggestion('Besok hujan tidak?')">☔ Besok hujan?</span>
+                            <span class="suggestion-chip" onclick="sendSuggestion('Butuh bawa payung?')">🌂 Butuh payung?</span>
+                            <span class="suggestion-chip" onclick="sendSuggestion('Kualitas udara bagaimana?')">💨 Kualitas udara</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input type="text" id="chatInput" placeholder="Tanya Ashley... (contoh: cuaca besok?)" 
+                   onkeypress="if(event.key === 'Enter') sendChatMessage()">
+            <button class="chat-send-btn" onclick="sendChatMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
     </div>
 
     <script>
@@ -2397,10 +2661,125 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }} else {{
         initImageClassifier();
     }}
+
+    // ============ LIVE CHAT ASHLEY JAVASCRIPT ============
+    let isChatOpen = false;
+    let currentContext = {{
+        location: null,
+        lastQuery: null
+    }};
+    
+    function toggleChatWidget() {{
+        const widget = document.getElementById('chatWidget');
+        isChatOpen = !isChatOpen;
+        
+        if (isChatOpen) {{
+            widget.classList.add('open');
+            document.getElementById('chatInput').focus();
+        }} else {{
+            widget.classList.remove('open');
+        }}
+    }}
+    
+    function closeChatWidget() {{
+        const widget = document.getElementById('chatWidget');
+        isChatOpen = false;
+        widget.classList.remove('open');
+    }}
+    
+    function sendSuggestion(text) {{
+        document.getElementById('chatInput').value = text;
+        sendChatMessage();
+    }}
+    
+    function addMessage(text, sender, isTyping = false) {{
+        const messagesContainer = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${{sender}}`;
+        
+        if (isTyping) {{
+            messageDiv.innerHTML = `
+                <div class="message-content typing">
+                    <div class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            messageDiv.id = 'typingIndicator';
+        }} else {{
+            messageDiv.innerHTML = `<div class="message-content">${{text}}</div>`;
+        }}
+        
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        return messageDiv;
+    }}
+    
+    function removeTypingIndicator() {{
+        const typing = document.getElementById('typingIndicator');
+        if (typing) typing.remove();
+    }}
+    
+    async function sendChatMessage() {{
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        
+        if (!message) return;
+        
+        addMessage(escapeHtml(message), 'user');
+        input.value = '';
+        
+        addMessage('', 'bot', true);
+        
+        try {{
+            const response = await fetch('/chat-ashley', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({{ 
+                    message: message,
+                    context: currentContext 
+                }})
+            }});
+            
+            const data = await response.json();
+            removeTypingIndicator();
+            addMessage(data.reply, 'bot');
+            
+            if (data.detected_location) {{
+                currentContext.location = data.detected_location;
+            }}
+            
+        }} catch (error) {{
+            console.error('Chat error:', error);
+            removeTypingIndicator();
+            addMessage('Maaf, saya sedang bermasalah. Coba lagi ya! 😊', 'bot');
+        }}
+    }}
+    
+    function escapeHtml(text) {{
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }}
+    
+    document.addEventListener('click', function(event) {{
+        const widget = document.getElementById('chatWidget');
+        const toggleBtn = document.getElementById('chatToggleBtn');
+        
+        if (isChatOpen && widget && toggleBtn) {{
+            if (!widget.contains(event.target) && !toggleBtn.contains(event.target)) {{
+                closeChatWidget();
+            }}
+        }}
+    }});
     </script>
 </body>
 </html>"""
-    return html_content# ============ ROUTE HOME ============
+    return html_content
+
+# ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     global selected_location
@@ -3520,6 +3899,35 @@ async def train_image_classifier_route(dataset_path: str):
         return {"success": True, "accuracy": result["accuracy"], "val_accuracy": result["val_accuracy"]}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+# ============ LIVE CHAT ASHLEY ENDPOINT ============
+class ChatRequest(BaseModel):
+    message: str
+    context: dict = {}
+
+@app.post("/chat-ashley")
+async def chat_ashley(request: ChatRequest):
+    global selected_location
+    
+    user_message = request.message
+    context = request.context
+    current_location = context.get("location") or selected_location["name"]
+    
+    # Ambil data cuaca untuk lokasi yang sedang aktif
+    weather = get_current_weather(selected_location["latitude"], selected_location["longitude"])
+    forecast = get_6day_forecast(selected_location["latitude"], selected_location["longitude"])
+    air_quality = get_air_quality(selected_location["latitude"], selected_location["longitude"])
+    
+    # Proses dengan Ashley Chatbot
+    result = ashley_chatbot.process_input(
+        user_message, 
+        weather, 
+        forecast, 
+        air_quality, 
+        current_location
+    )
+    
+    return result
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
