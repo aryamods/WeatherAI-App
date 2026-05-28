@@ -18,6 +18,11 @@ import warnings
 from pathlib import Path
 import base64
 import cv2
+import gdown
+import json
+import time
+import random
+from threading import Lock
 
 warnings.filterwarnings("ignore")
 
@@ -28,7 +33,6 @@ app = FastAPI(
 )
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-
 
 class PasswordRequest(BaseModel):
     password: str
@@ -45,53 +49,192 @@ except ImportError:
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)
     print("\033[92mINFO\033[0m:     python-dotenv tersedia.")
 except ImportError:
     print("\033[92mINFO\033[0m:     python-dotenv tidak tersedia.")
 
-GEMINI_API_KEY = "AIzaSyD2pPh-rfKgqEeugy13BzWda-9ft3zWo6A"
-GEMINI_API_KEY_BACKUP = "AIzaSyBD1VSdjPI81zOzqlnHHOgWeqIBauvn_hI"
-GEMINI_API_KEY_BACKUP2 = "AIzaSyB0_TDsxSb2d0W3xZ_aY_BdZ4DuRi3h3ag"
-GEMINI_API_KEY_BACKUP3 = "AIzaSyBKSoGybzrpLwFMEm9oukqxJcF25I7XAPs"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY_BACKUP = os.environ.get("GEMINI_API_KEY_BACKUP", "")
+GEMINI_API_KEY_BACKUP2 = os.environ.get("GEMINI_API_KEY_BACKUP2", "")
+GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
 
-def initialize_gemini_client():
-    api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
-    api_keys = [key for key in api_keys if key]
+# ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
+class GeminiRotator:
+    def __init__(self, api_keys):
+        self.keys = []
+        for i, key in enumerate(api_keys):
+            if key:
+                self.keys.append({
+                    'key': key,
+                    'account': f"Account_{i+1}",
+                    'failures': 0,
+                    'cooldown_until': 0,
+                    'used_today': 0,
+                    'last_used': 0
+                })
+        
+        self.current_index = 0
+        self.lock = Lock()
+        self.last_reset = time.time()
+        self.daily_limit = 50
+        
+        print(f"\033[92mINFO\033[0m:     Gemini Rotator initialized with {len(self.keys)} API keys")
+    
+    def _reset_daily_counter(self):
+        now = time.time()
+        if now - self.last_reset > 86400:
+            for key in self.keys:
+                key['used_today'] = 0
+            self.last_reset = now
+            print("\033[92mINFO\033[0m:     Daily quota counters reset")
+    
+    def get_best_key(self):
+        with self.lock:
+            self._reset_daily_counter()
+            now = time.time()
+            
+            available = []
+            for key in self.keys:
+                if key['cooldown_until'] <= now and key['used_today'] < self.daily_limit:
+                    available.append(key)
+            
+            if not available:
+                if self.keys:
+                    min_cooldown = min(k['cooldown_until'] for k in self.keys)
+                    wait_time = min_cooldown - now
+                    if wait_time > 0:
+                        print(f"⚠️ Semua API key dalam cooldown, tunggu {wait_time:.0f} detik")
+                    return None
+                return None
+            
+            return min(available, key=lambda x: x['used_today'])
+    
+    def call_api(self, prompt, model="gemini-2.5-flash", max_retries=3):
+        for attempt in range(max_retries):
+            key_info = self.get_best_key()
+            
+            if not key_info:
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+                    continue
+                else:
+                    print("INFO:    Tidak ada API key yang tersedia")
+                    return None
+            
+            try:
+                from google import genai
+                
+                print(f"INFO:    Menggunakan {key_info['account']} (used: {key_info['used_today']}/{self.daily_limit})")
+                
+                client = genai.Client(api_key=key_info['key'])
+                
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config={
+                        'temperature': 0.8,
+                        'max_output_tokens': 2000,
+                    }
+                )
+                
+                key_info['used_today'] += 1
+                key_info['failures'] = 0
+                key_info['last_used'] = time.time()
+                
+                time.sleep(0.5)
+                
+                return response.text.strip()
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"⚠️ {key_info['account']} error: {error_msg[:100]}")
+                
+                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)
+                    key_info['cooldown_until'] = time.time() + cooldown_time
+                    key_info['failures'] += 1
+                    print(f"   🔄 Cooldown for {cooldown_time} seconds")
+                    
+                elif "quota" in error_msg.lower():
+                    key_info['cooldown_until'] = time.time() + 3600
+                    key_info['failures'] += 1
+                    print(f"   ⚠️ Quota exhausted, cooldown 1 hour")
+                    
+                else:
+                    key_info['cooldown_until'] = time.time() + 10
+                
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    print(f"   Retry in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+        
+        return None
+    
+    def get_status(self):
+        status = []
+        now = time.time()
+        for key in self.keys:
+            status.append({
+                'account': key['account'],
+                'used_today': key['used_today'],
+                'daily_limit': self.daily_limit,
+                'in_cooldown': key['cooldown_until'] > now,
+                'cooldown_remaining': max(0, key['cooldown_until'] - now),
+                'failures': key['failures']
+            })
+        return status
 
-    if not api_keys:
-        print("\033[92mINFO:\033[0m     API key tidak tersedia.")
-        return None, False
-
-    for i, api_key in enumerate(api_keys, 1):
-        try:
-            client = genai.Client(api_key=api_key)
-            test_response = client.models.generate_content(
-                model="gemini-2.5-flash", contents="Test connection"
-            )
-            print(f"\033[92mINFO\033[0m:     Ashley siap digunakan dengan API Key {i}")
-            print("   Model: gemini-2.5-flash")
-            return client, True
-        except Exception as e:
-            print(f"\033[92mINFO\033[0m:     API Key {i} gagal: {e}")
-            continue
-
-    print("\033[92mINFO\033[0m:     Semua API key gagal. AI features akan dinonaktifkan.")
-    return None, False
-
+# ============ INISIALISASI GEMINI ============
 AI_AVAILABLE = False
-client = None
+gemini_rotator = None
 
 try:
     from google import genai
-    client, AI_AVAILABLE = initialize_gemini_client()
+    
+    api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
+    api_keys = [key for key in api_keys if key]
+    
+    if api_keys:
+        gemini_rotator = GeminiRotator(api_keys)
+        AI_AVAILABLE = True
+        print(f"\033[92mINFO\033[0m:     Gemini AI siap digunakan dengan {len(api_keys)} API keys")
+        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-2.5-flash")
+    else:
+        print("\033[93mWARNING\033[0m: Tidak ada API key yang dikonfigurasi")
+        
 except ImportError:
-    print("\033[92mINFO\033[0m:     Library google-genai belum terinstall.")
+    print("\033[91mERROR\033[0m: Library google-genai belum terinstall.")
+    print("        Install dengan: pip install google-genai")
 except Exception as e:
-    print(f"\033[92mINFO\033[0m:     Error inisialisasi: {e}")
-    AI_AVAILABLE = False
+    print(f"\033[91mERROR\033[0m: Error inisialisasi Gemini: {e}")
 
 DB_PATH = "weather.db"
+
+def download_model_from_gdrive():
+    model_path = "weather_cnn_model.keras"
+    
+    if os.path.exists(model_path):
+        os.remove(model_path)
+        print("🗑️ Model lama dihapus")
+    
+    print("📥 Downloading CNN model from Google Drive (78MB)...")
+    try:
+        file_id = "13zxQTvCgsj0CJlDyzQyFSaStRaYnb10I"
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, model_path, quiet=False)
+        
+        if os.path.exists(model_path):
+            file_size = os.path.getsize(model_path) / (1024 * 1024)
+            print(f"✅ Model downloaded! Size: {file_size:.2f} MB")
+            return True
+        else:
+            print("❌ Download failed - file not found")
+            return False
+    except Exception as e:
+        print(f"❌ Error downloading model: {e}")
+        return False
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -186,7 +329,6 @@ init_db()
 TESTIMONIALS_DB_PATH = "testimonials.db"
 
 def init_testimonials_db():
-    """Inisialisasi database untuk testimonial"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -204,7 +346,6 @@ def init_testimonials_db():
     print("\033[92mINFO\033[0m:     Database testimonials initialized")
 
 def save_testimonial(name: str, role: str, comment: str, rating: int):
-    """Menyimpan testimonial ke database"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -215,7 +356,6 @@ def save_testimonial(name: str, role: str, comment: str, rating: int):
     conn.close()
 
 def get_all_testimonials():
-    """Mendapatkan semua testimonial"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, role, comment, rating, created_at FROM testimonials ORDER BY created_at DESC")
@@ -235,14 +375,12 @@ def get_all_testimonials():
     return testimonials
 
 def delete_testimonial_by_id(testimonial_id: int):
-    """Menghapus testimonial berdasarkan ID"""
     conn = sqlite3.connect(TESTIMONIALS_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM testimonials WHERE id = ?", (testimonial_id,))
     conn.commit()
     conn.close()
 
-# Inisialisasi database testimonial
 init_testimonials_db()
 
 def get_timezone_from_coords(latitude: float, longitude: float):
@@ -783,7 +921,6 @@ MODEL_CKPT_PATH = "weather_cnn_model.keras"
 class WeatherImageClassifier:
     def __init__(self):
         self.model = None
-        self.load_model()
 
     def build_model(self):
         if not TF_AVAILABLE:
@@ -851,7 +988,9 @@ class WeatherImageClassifier:
             except Exception as e:
                 print(f"⚠️ Gagal memuat model CNN: {e}")
                 return False
-        return False
+        else:
+            print(f"⚠️ Model CNN belum di-download. Silakan klik tombol 'Download & Load Model CNN'")
+            return False
 
     def predict_image(self, image_bytes: bytes) -> dict:
         if not TF_AVAILABLE:
@@ -860,7 +999,7 @@ class WeatherImageClassifier:
         if self.model is None:
             self.load_model()
             if self.model is None:
-                return {"error": "Model CNN belum dilatih. Jalankan training terlebih dahulu.", "prediction": None, "confidence": 0}
+                return {"error": "Model CNN belum di-download. Klik tombol 'Download & Load Model CNN' terlebih dahulu.", "prediction": None, "confidence": 0}
 
         try:
             nparr = np.frombuffer(image_bytes, np.uint8)
@@ -993,8 +1132,8 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
     return f"{p1}{p2} {p3} {p4}"
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
-    if not AI_AVAILABLE or client is None:
-        print("⚠️ AI tidak tersedia, menggunakan fallback")
+    if not AI_AVAILABLE or gemini_rotator is None:
+        print("INFO:    AI tidak tersedia, menggunakan fallback")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
     location = location_name or "Lokasi Anda"
@@ -1021,10 +1160,10 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
             f"hujan {int(day['precipitation'])}mm, UV {day['uv_index']:.1f}"
         )
     forecast_text = "\n".join(forecast_summary)
+    
+    prompt = f"""Anda adalah meteorolog profesional. Tulis analisis cuaca dalam BAHASA INDONESIA.
 
-    prompt = f"""Kamu adalah meteorolog yang ramah. Buat deskripsi cuaca dan kualitas udara untuk {location} dalam 4-5 kalimat (sekitar 100-150 kata). Gaya natural seperti sedang ngobrol.
-
-DATA CUACA:
+DATA CUACA DI {location.upper()}:
 - Suhu: {int(temp)}°C (terasa {int(feels_like)}°C)
 - Kondisi: {condition}
 - Kelembaban: {int(humidity)}%
@@ -1041,31 +1180,284 @@ KUALITAS UDARA:
 PRAKIRAAN 3 HARI:
 {forecast_text}
 
-PANDUAN:
-1. Bahasa Indonesia yang natural dan mengalir
-2. Sertakan informasi kualitas udara secara alami
-3. Beri konteks (misal: "suhu 32°C cukup panas untuk Jakarta")
-4. Jika ada kondisi ekstrem (UV tinggi, AQI buruk, hujan lebat), sebutkan dengan bijak
-5. Akhiri dengan 1 kalimat prakiraan singkat untuk besok
-6. JANGAN gunakan bullet points, JANGAN terlalu panjang (maks 150 kata)
-7. JANGAN gunakan emoji berlebihan, cukup 1-2 saja jika perlu
+INSTRUKSI:
+1. TULIS dalam SATU PARAGRAF yang mengalir alami
+2. PANJANG 120-150 kata
+3. JANGAN gunakan emoji, bullet points, atau markdown
+4. JANGAN ulangi data mentah, tapi jelaskan dalam kalimat natural
+5. Sertakan 1-2 rekomendasi spesifik
 
-Mulai menulis:"""
+HASIL ANALISIS UNTUK {location.upper()}:"""
 
     try:
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        insights = response.text.strip()
-        print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
-
-        word_count = len(insights.split())
-        if word_count < 30 or word_count > 200:
-            print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
+        insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
+        
+        if insights:
+            word_count = len(insights.split())
+            print(f"INFO:    Gemini response received (panjang: {word_count} kata)")
+            
+            if word_count < 80 or word_count > 160:
+                print(f"INFO:    Response tidak ideal ({word_count} kata), menggunakan fallback")
+                return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
+            
+            return insights
+        else:
+            print("INFO:    Gemini returned None, menggunakan fallback")
             return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
-
-        return insights
+            
     except Exception as e:
-        print(f"❌ Gemini API error: {e}")
+        print(f"INFO:    Gemini API error: {e}")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
+
+# ============ LIVE CHAT ASHLEY - CLASS ============
+class AshleyChatbot:
+    def __init__(self):
+        self.context = {
+            "location": None,
+            "last_topic": None,
+            "conversation_history": []
+        }
+    
+    def get_current_context(self):
+        return self.context
+    
+    def update_context(self, location=None, topic=None):
+        if location:
+            self.context["location"] = location
+        if topic:
+            self.context["last_topic"] = topic
+    
+    def process_input(self, user_message: str, current_weather: dict, forecast: list, air_quality: dict, location_name: str):
+        user_message_lower = user_message.lower()
+        
+        # ========== DETEKSI LOKASI ==========
+        locations = ["jakarta", "bandung", "surabaya", "bogor", "semarang", "yogyakarta", 
+                     "denpasar", "makassar", "medan", "palembang", "bekasi", "tangerang", 
+                     "solo", "malang", "padang", "pekanbaru", "manado", "jayapura", "pontianak",
+                     "balikpapan", "banjarmasin", "lampung", "cirebon", "tasikmalaya", "purwokerto"]
+        
+        detected_location = None
+        for loc in locations:
+            if loc in user_message_lower:
+                detected_location = loc.title()
+                self.context["location"] = loc.title()
+                break
+        
+        current_location = self.context["location"] or location_name
+        
+        # ========== LAYER 1: RULE-BASED (GRATIS) ==========
+        
+        # 1. SAPAAN
+        if any(word in user_message_lower for word in ["hai", "halo", "hello", "hey", "assalamualaikum", "pagi", "siang", "sore", "malam"]):
+            greetings = [
+                f"Halo! Senang bertemu Anda. Saya Ashley, asisten cuaca pintar. Ada yang bisa saya bantu tentang cuaca hari ini di {current_location}? 😊",
+                f"Hai! Selamat {'pagi' if 5 <= datetime.now().hour < 11 else 'siang' if 11 <= datetime.now().hour < 15 else 'sore' if 15 <= datetime.now().hour < 18 else 'malam'}! Cuaca hari ini di {current_location} cukup {'panas' if current_weather.get('temperature', 30) > 32 else 'sejuk'} lho. Mau tanya lebih lanjut? ☁️",
+                f"Halo! Saya Ashley siap membantu. Mau tahu prakiraan cuaca di {current_location} hari ini atau besok? 🌤️"
+            ]
+            return {"reply": random.choice(greetings), "detected_location": detected_location}
+        
+        # 2. CUACA HARI INI
+        elif any(word in user_message_lower for word in ["cuaca hari ini", "sekarang", "hari ini", "today", "current", "cuaca sekarang"]):
+            temp = int(current_weather.get("temperature", 0))
+            condition = get_condition_text(current_weather.get("weather_code", 0))
+            humidity = int(current_weather.get("humidity", 0))
+            rain = current_weather.get("precipitation", 0)
+            feels_like = int(current_weather.get("feels_like", 0))
+            
+            if rain > 5:
+                reply = f"Sekarang di {current_location} {condition.lower()} dengan suhu {temp}°C (terasa {feels_like}°C). Sedang hujan cukup lebat ({rain:.0f}mm), jangan lupa bawa payung dan hati-hati di jalan ya! 🌧️"
+            elif rain > 0:
+                reply = f"Hari ini di {current_location} {condition.lower()}, suhu {temp}°C dengan kelembaban {humidity}%. Ada gerimis tipis, aman bawa payung lipat saja. ☂️"
+            else:
+                if temp > 33:
+                    reply = f"Cuaca {current_location} hari ini {condition.lower()} dengan suhu {temp}°C. Wah panas sekali! Jangan lupa minum air putih yang cukup dan gunakan tabir surya ya! 🥵"
+                elif temp < 25:
+                    reply = f"Cuaca {current_location} hari ini {condition.lower()} dengan suhu {temp}°C. Udara terasa dingin, cocok pakai jaket atau sweater! 🧥"
+                else:
+                    reply = f"Cuaca {current_location} hari ini {condition.lower()} dengan suhu {temp}°C. Kelembaban {humidity}%. {'Cocok untuk aktivitas luar ruangan! 🌞' if humidity < 70 else 'Agak lembab, jaga stamina ya! 💪'}"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 3. BESOK
+        elif any(word in user_message_lower for word in ["besok", "tomorrow", "esok", "cuaca besok"]):
+            tomorrow = forecast[1] if len(forecast) > 1 else forecast[0]
+            temp = int(tomorrow["temp_max"])
+            temp_min = int(tomorrow["temp_min"])
+            rain = tomorrow.get("precipitation", 0)
+            condition = get_condition_text(tomorrow.get("weather_code", 0))
+            uv = tomorrow.get("uv_index", 5)
+            
+            if rain > 5:
+                reply = f"Besok di {current_location} diprediksi {condition.lower()} dengan suhu {temp}°C (min {temp_min}°C). Curah hujan cukup tinggi ({rain:.0f}mm). Saya sarankan bawa payung dan jas hujan! ☔"
+            elif rain > 0:
+                reply = f"Besok di {current_location} {condition.lower()}, suhu {temp}°C. Ada potensi gerimis, lebih aman sedia payung. 🌦️"
+            else:
+                if uv > 8:
+                    reply = f"Besok cuaca {current_location} {condition.lower()}, suhu {temp}°C. Indeks UV tinggi ({uv:.0f}), jangan lupa pakai tabir surya! 🌞"
+                else:
+                    reply = f"Besok cuaca {current_location} {condition.lower()}, suhu {temp}°C. Cerah, cocok untuk rencana liburan atau jalan-jalan! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 4. LUSA
+        elif any(word in user_message_lower for word in ["lusa", "day after", "dua hari"]):
+            day_after = forecast[2] if len(forecast) > 2 else forecast[0]
+            temp = int(day_after["temp_max"])
+            rain = day_after.get("precipitation", 0)
+            condition = get_condition_text(day_after.get("weather_code", 0))
+            
+            if rain > 3:
+                reply = f"Lusa di {current_location} {condition.lower()} dengan suhu {temp}°C. Ada hujan, sedia payung ya! ☔"
+            else:
+                reply = f"Lusa di {current_location} {condition.lower()} dengan suhu {temp}°C. {'Cocok untuk aktivitas outdoor! 😊' if rain == 0 else 'Semoga harimu menyenangkan!'}"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 5. PAYUNG / HUJAN
+        elif any(word in user_message_lower for word in ["payung", "butuh payung", "bawa payung", "hujan", "ujian"]):
+            today_rain = current_weather.get("precipitation", 0)
+            tomorrow_rain = forecast[1].get("precipitation", 0) if len(forecast) > 1 else 0
+            day_after_rain = forecast[2].get("precipitation", 0) if len(forecast) > 2 else 0
+            
+            max_rain = max(today_rain, tomorrow_rain, day_after_rain)
+            
+            if max_rain > 5:
+                reply = f"Hmm, dari data cuaca, akan ada hujan dalam beberapa hari ke depan. Saya sarankan bawa payung atau jas hujan ya! ☔"
+            elif max_rain > 0:
+                reply = f"Ada potensi gerimis di {current_location}, lebih aman bawa payung lipat saja. Tidak ada salahnya bersiap! 🌂"
+            else:
+                reply = f"Dalam 3 hari ke depan tidak ada hujan signifikan di {current_location}. Aman tidak bawa payung, tapi tetap sedia tidak ada salahnya! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 6. KUALITAS UDARA
+        elif any(word in user_message_lower for word in ["kualitas udara", "aqi", "polusi", "udara", "pm2", "pm10"]):
+            aqi = air_quality.get("aqi", 0)
+            status = air_quality.get("status", "Baik")
+            pm25 = air_quality.get("pm25", 0)
+            pm10 = air_quality.get("pm10", 0)
+            
+            if aqi <= 50:
+                reply = f"Kualitas udara di {current_location} BAIK (AQI {aqi}). PM2.5 {pm25} µg/m³, PM10 {pm10} µg/m³. Udara segar, cocok untuk olahraga luar ruangan! 🏃"
+            elif aqi <= 100:
+                reply = f"Kualitas udara di {current_location} SEDANG (AQI {aqi}). Masih aman, tapi penderita asma sebaiknya tidak beraktivitas berat terlalu lama. 😷"
+            elif aqi <= 150:
+                reply = f"Perhatian! Kualitas udara di {current_location} TIDAK SEHAT untuk kelompok sensitif (AQI {aqi}). Gunakan masker jika keluar rumah. 😷"
+            else:
+                reply = f"Peringatan! Kualitas udara di {current_location} TIDAK SEHAT (AQI {aqi}). Kurangi aktivitas luar ruangan dan gunakan masker N95! ⚠️"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 7. SUHU / PANAS / DINGIN
+        elif any(word in user_message_lower for word in ["suhu", "panas", "dingin", "temperatur", "berapa derajat"]):
+            temp = int(current_weather.get("temperature", 0))
+            feels_like = int(current_weather.get("feels_like", 0))
+            condition = get_condition_text(current_weather.get("weather_code", 0))
+            
+            if temp > 33:
+                reply = f"Wah panas sekali! Suhu {temp}°C di {current_location}, terasa seperti {feels_like}°C. Jangan lupa minum air putih yang cukup dan pakai tabir surya ya! 🥵"
+            elif temp < 25:
+                reply = f"Udara dingin nih, suhu {temp}°C di {current_location}. Pakai jaket atau sweater biar tidak kedinginan! ☕"
+            else:
+                reply = f"Suhu di {current_location} {temp}°C dengan kondisi {condition.lower()}. Masih nyaman untuk beraktivitas. Nikmati harimu! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 8. FITUR APLIKASI
+        elif any(word in user_message_lower for word in ["cara pakai", "fitur", "gunakan", "simpan lokasi", "bagaimana cara", "gimana caranya"]):
+            reply = """WeatherAI punya banyak fitur keren:
+
+1️⃣ **Cuaca Real-time** - Lihat cuaca hari ini
+2️⃣ **Prakiraan 6 Hari** - Ramalan cuaca ke depan
+3️⃣ **Prediksi ML** - Random Forest prediksi suhu
+4️⃣ **Deteksi Gambar** - Upload foto, aku tebak cuacanya
+5️⃣ **Kualitas Udara** - Cek AQI, PM2.5, PM10
+6️⃣ **Simpan Lokasi** - Klik ⭐ di sidebar untuk simpan kota favorit
+
+Ada yang mau dicoba? 😊"""
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 9. TERIMA KASIH
+        elif any(word in user_message_lower for word in ["terima kasih", "makasih", "thanks", "thank you", "thankyou"]):
+            replies = [
+                "Sama-sama! Senang bisa membantu. Ada pertanyaan lain tentang cuaca? 😊",
+                "Sama-sama! Jangan ragu bertanya lagi ya! ☁️",
+                "Terima kasih kembali! Semoga harimu menyenangkan! ✨"
+            ]
+            return {"reply": random.choice(replies), "detected_location": detected_location}
+        
+        # 10. PERBANDINGAN
+        elif any(word in user_message_lower for word in ["banding", "vs", "lebih", "daripada", "perbandingan"]):
+            reply = f"Saat ini saya hanya bisa memberikan informasi cuaca untuk {current_location}. Coba ganti lokasi dulu di sidebar, atau tanyakan spesifik untuk kota lain ya! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 11. OLAHRAGA / AKTIVITAS
+        elif any(word in user_message_lower for word in ["olahraga", "lari", "jalan", "bersepeda", "renang", "aktivitas"]):
+            temp = int(current_weather.get("temperature", 0))
+            rain = current_weather.get("precipitation", 0)
+            aqi = air_quality.get("aqi", 0)
+            
+            if rain > 2:
+                reply = f"Hari ini di {current_location} sedang hujan, kurang cocok untuk olahraga outdoor. Coba olahraga indoor seperti yoga atau fitness di rumah ya! 🏋️"
+            elif temp > 33:
+                reply = f"Cuaca panas sekali ({temp}°C), tidak disarankan olahraga berat di luar. Bisa coba renang atau olahraga pagi/sore hari! 🏊"
+            elif aqi > 100:
+                reply = f"Kualitas udara sedang kurang baik (AQI {aqi}). Sebaiknya olahraga di dalam ruangan dulu ya! 😷"
+            else:
+                reply = f"Cuaca di {current_location} cocok untuk olahraga! {'Pagi hari lebih sejuk' if temp > 30 else 'Suhu nyaman, bisa lari atau jalan santai'} 🏃"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # 12. BERAPA LAMA
+        elif any(word in user_message_lower for word in ["berapa lama", "durasi", "kapan berhenti", "kapan reda"]):
+            rain = current_weather.get("precipitation", 0)
+            if rain > 0:
+                reply = f"Hujan saat ini di {current_location} dengan intensitas {'ringan' if rain < 2 else 'sedang' if rain < 5 else 'lebat'}. Biasanya hujan akan reda dalam 1-2 jam ke depan. Tetap aman ya! 🌧️"
+            else:
+                reply = f"Saat ini tidak ada hujan di {current_location}. Cuaca cerah, bisa lanjut aktivitas! 😊"
+            return {"reply": reply, "detected_location": detected_location}
+        
+        # ========== LAYER 3: GEMINI (UNTUK PERTANYAAN KOMPLEKS) ==========
+        else:
+            try:
+                if gemini_rotator and AI_AVAILABLE:
+                    prompt = f"""Anda adalah Ashley, asisten cuaca yang ramah dan profesional di aplikasi WeatherAI.
+Pengguna bertanya: "{user_message}"
+Lokasi: {current_location}
+Data cuaca saat ini: {current_weather.get('temperature', 0)}°C, {get_condition_text(current_weather.get('weather_code', 0))}
+Prakiraan besok: {forecast[1]['temp_max'] if len(forecast) > 1 else 0}°C
+Kualitas udara: AQI {air_quality.get('aqi', 0)} ({air_quality.get('status', 'Baik')})
+
+INSTRUKSI PENTING:
+1. Jawab dalam BAHASA INDONESIA yang santai dan natural
+2. Maksimal 2-3 kalimat saja, jangan panjang
+3. Jika pertanyaan di luar topik cuaca, bilang: "Maaf, saya hanya bisa membantu pertanyaan seputar cuaca ya! Coba tanya tentang suhu, hujan, kualitas udara, atau saran aktivitas 😊"
+4. Sertakan emoji yang relevan (☀️, 🌧️, 🌤️, ☁️, 🌂)
+5. JANGAN ulang data mentah, tapi jelaskan dengan bahasa manusia
+
+Jawaban Ashley:"""
+                    
+                    response = gemini_rotator.call_api(prompt, max_retries=2)
+                    if response and len(response) > 10:
+                        return {"reply": response[:500], "detected_location": detected_location}
+                
+                # Fallback jika Gemini gagal
+                replies = [
+                    f"Maaf, saya kurang paham dengan pertanyaan Anda. Coba tanyakan tentang cuaca hari ini, besok, atau kualitas udara di {current_location} ya! 😊",
+                    f"Hmm, saya tidak yakin bisa menjawab itu. Saya lebih ahli di bidang cuaca. Coba tanya tentang suhu, hujan, atau butuh payung tidak? 🌤️",
+                    f"Pertanyaan menarik! Tapi saya khusus untuk membantu masalah cuaca. Ada yang ingin ditanyakan tentang prakiraan cuaca? ☁️"
+                ]
+                return {"reply": random.choice(replies), "detected_location": detected_location}
+                
+            except Exception as e:
+                print(f"Chat error: {e}")
+                return {"reply": f"Maaf, saya sedang sibuk. Coba tanyakan lagi nanti ya! 😊", "detected_location": detected_location}
+
+# Inisialisasi Ashley Chatbot
+ashley_chatbot = AshleyChatbot()
+
+# ============ ENDPOINT CEK STATUS API KEY ============
+@app.get("/api-key-status")
+async def api_key_status():
+    if gemini_rotator:
+        return {
+            "available": AI_AVAILABLE,
+            "keys": gemini_rotator.get_status()
+        }
+    return {"available": False, "keys": []}
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -1076,6 +1468,7 @@ selected_location = {
     "timezone": "Asia/Jakarta",
 }
 
+# ============ RENDER PAGE FUNCTION ============
 def render_page(content: str, active: str = "home", message: str = None, message_type: str = None, saved_locations: list = None, selected_location: dict = None):
     message_html = ""
     if message:
@@ -1128,7 +1521,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </script>
         """
 
-    return f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -1562,7 +1955,59 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </main>
     </div>
 
-<script>
+    <!-- Live Chat Ashley Widget -->
+    <button class="chat-toggle-btn" id="chatToggleBtn">
+        <i class="fas fa-comment-dots"></i>
+        <span class="chat-badge"></span>
+    </button>
+
+    <div class="chat-widget" id="chatWidget">
+        <div class="chat-header" onclick="toggleChatWidget()">
+            <div class="chat-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="chat-title">
+                <span>Ashley - Live Chat</span>
+                <div class="chat-status">
+                    Online · Siap membantu
+                </div>
+            </div>
+            <div class="chat-close" onclick="event.stopPropagation(); closeChatWidget()">
+                <i class="fas fa-times"></i>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-content">
+                    <div class="welcome-message">
+                        <div class="welcome-avatar">☁️</div>
+                        <div class="welcome-text">
+                            <strong>Halo! Saya Ashley</strong><br>
+                            Asisten cuaca pintar Anda. Ada yang bisa saya bantu?
+                        </div>
+                        <div class="welcome-suggestions">
+                            <span class="suggestion-chip" onclick="sendSuggestion('Bagaimana cuaca hari ini?')">🌤️ Cuaca hari ini</span>
+                            <span class="suggestion-chip" onclick="sendSuggestion('Besok hujan tidak?')">☔ Besok hujan?</span>
+                            <span class="suggestion-chip" onclick="sendSuggestion('Butuh bawa payung?')">🌂 Butuh payung?</span>
+                            <span class="suggestion-chip" onclick="sendSuggestion('Kualitas udara bagaimana?')">💨 Kualitas udara</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input type="text" id="chatInput" placeholder="Tanya Ashley... (contoh: cuaca besok?)" 
+                   onkeypress="if(event.key === 'Enter') sendChatMessage()">
+            <button class="chat-send-btn" onclick="sendChatMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+    // === JAVASCRIPT CODE ===
     window.addEventListener('load', function() {{
         setTimeout(function() {{
             var loader = document.getElementById('loaderWrapper');
@@ -1638,11 +2083,11 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}).then(function(response) {{
                 setTimeout(function() {{
                     hideTrainingModal();
-                    window.location.href = '/main?message=✅ Model ML berhasil dilatih!&type=success';
+                    window.location.href = '/main?message=Model berhasil dilatih!&type=success';
                 }}, 500);
             }}).catch(function(error) {{
                 hideTrainingModal();
-                window.location.href = '/main?message=❌ Gagal melatih model&type=error';
+                window.location.href = '/main?message=Gagal melatih model&type=error';
             }});
         }});
     }});
@@ -1666,7 +2111,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}
             localStorage.setItem('theme', 'dark');
         }}
-        // Update WhatsApp notification theme when toggling
         updateWhatsAppTheme();
     }}
 
@@ -1874,11 +2318,9 @@ def render_page(content: str, active: str = "home", message: str = None, message
         window.open('https://wa.me/6283168640385?text=menu', '_blank');
     }}
 
-    // Function to update WhatsApp notification theme without underline
     function updateWhatsAppTheme() {{
         var notif = document.getElementById('whatsappNotif');
         if (notif) {{
-            // Remove any existing text-decoration
             notif.style.textDecoration = 'none';
             var allChildren = notif.querySelectorAll('*');
             for (var i = 0; i < allChildren.length; i++) {{
@@ -1925,24 +2367,25 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     // Custom Alert Functions
-    let currentAlertCallback = null;
-    let currentPromptCallback = null;
+    var currentAlertCallback = null;
+    var currentPromptCallback = null;
 
-    function showCustomAlert(title, message, type = 'info', callback = null) {{
-        const alert = document.getElementById('customAlert');
-        const icon = alert.querySelector('.custom-alert-icon i');
-        const titleEl = document.getElementById('alertTitle');
-        const messageEl = document.getElementById('alertMessage');
+    function showCustomAlert(title, message, type, callback) {{
+        if (type === undefined) type = 'info';
+        var alert = document.getElementById('customAlert');
+        var icon = alert.querySelector('.custom-alert-icon i');
+        var titleEl = document.getElementById('alertTitle');
+        var messageEl = document.getElementById('alertMessage');
         
         alert.classList.remove('error', 'success', 'warning', 'info');
         alert.classList.add(type);
         
-        let iconClass = 'fa-info-circle';
+        var iconClass = 'fa-info-circle';
         if (type === 'error') iconClass = 'fa-exclamation-circle';
         else if (type === 'success') iconClass = 'fa-check-circle';
         else if (type === 'warning') iconClass = 'fa-exclamation-triangle';
         
-        icon.className = `fas ${{iconClass}}`;
+        icon.className = 'fas ' + iconClass;
         
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -1952,14 +2395,14 @@ def render_page(content: str, active: str = "home", message: str = None, message
         alert.classList.add('show');
         
         if (type === 'success' || type === 'info') {{
-            setTimeout(() => {{
+            setTimeout(function() {{
                 closeCustomAlert();
             }}, 3000);
         }}
     }}
 
     function closeCustomAlert() {{
-        const alert = document.getElementById('customAlert');
+        var alert = document.getElementById('customAlert');
         alert.classList.remove('show');
         if (currentAlertCallback) {{
             currentAlertCallback();
@@ -1968,10 +2411,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function showCustomPrompt(title, message, callback) {{
-        const prompt = document.getElementById('customPrompt');
-        const titleEl = document.getElementById('promptTitle');
-        const messageEl = document.getElementById('promptMessage');
-        const input = document.getElementById('promptInput');
+        var prompt = document.getElementById('customPrompt');
+        var titleEl = document.getElementById('promptTitle');
+        var messageEl = document.getElementById('promptMessage');
+        var input = document.getElementById('promptInput');
         
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -1982,20 +2425,20 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         prompt.classList.add('show');
         
-        setTimeout(() => {{
+        setTimeout(function() {{
             input.focus();
         }}, 100);
     }}
 
     function closeCustomPrompt() {{
-        const prompt = document.getElementById('customPrompt');
+        var prompt = document.getElementById('customPrompt');
         prompt.classList.remove('show');
         currentPromptCallback = null;
     }}
 
     function submitPrompt() {{
-        const input = document.getElementById('promptInput');
-        const password = input.value;
+        var input = document.getElementById('promptInput');
+        var password = input.value;
         
         if (currentPromptCallback) {{
             currentPromptCallback(password);
@@ -2003,11 +2446,9 @@ def render_page(content: str, active: str = "home", message: str = None, message
         closeCustomPrompt();
     }}
 
-    // ============ AMAN: Password tidak hardcoded, verifikasi di backend ============
     function promptAndDeleteTestimonial(id) {{
-        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', (password) => {{
+        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', function(password) {{
             if (password && password !== '') {{
-                // Kirim password ke backend untuk diverifikasi
                 fetch('/verify-delete-testimonial/' + id, {{
                     method: 'POST',
                     headers: {{
@@ -2015,17 +2456,17 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     }},
                     body: JSON.stringify({{ password: password }})
                 }})
-                .then(response => response.json())
-                .then(data => {{
+                .then(function(response) {{ return response.json(); }})
+                .then(function(data) {{
                     if (data.success) {{
-                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', () => {{
+                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', function() {{
                             window.location.href = '/about?message=Ulasan berhasil dihapus&type=success';
                         }});
                     }} else {{
                         showCustomAlert('Gagal!', data.message || 'Password salah! Ulasan tidak dapat dihapus.', 'error');
                     }}
                 }})
-                .catch(error => {{
+                .catch(function(error) {{
                     console.error('Error:', error);
                     showCustomAlert('Error!', 'Terjadi kesalahan pada server.', 'error');
                 }});
@@ -2183,33 +2624,35 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function trainImageClassifier() {{
-        showCustomPrompt('Training Model CNN', 'Masukkan path folder dataset (contoh: ./weather_dataset):', (datasetPath) => {{
-            if (!datasetPath) return;
+        var loadingDiv = document.getElementById('prediction-loading');
+        if (loadingDiv) {{
+            loadingDiv.style.display = 'block';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i>';
+        }}
+        
+        fetch('/download-cnn-model', {{
+            method: 'POST'
+        }})
+        .then(async function(response) {{
+            var data = await response.json();
             
-            var loadingDiv = document.getElementById('prediction-loading');
-            if (loadingDiv) loadingDiv.style.display = 'block';
+            if (loadingDiv) loadingDiv.style.display = 'none';
             
-            fetch('/train-image-classifier?dataset_path=' + encodeURIComponent(datasetPath), {{
-                method: 'POST'
-            }})
-            .then(function(response) {{ return response.json(); }})
-            .then(function(data) {{
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                if (data.success) {{
-                    showCustomAlert(
-                        'Berhasil!', 
-                        '✅ Model berhasil dilatih!\\nAccuracy: ' + (data.accuracy * 100).toFixed(2) + '%\\nVal Accuracy: ' + (data.val_accuracy * 100).toFixed(2) + '%',
-                        'success',
-                        function() {{ location.reload(); }}
-                    );
-                }} else {{
-                    showCustomAlert('Gagal', '❌ Gagal melatih model: ' + data.error, 'error');
-                }}
-            }})
-            .catch(function(error) {{
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
-            }});
+            if (data.success) {{
+                showCustomAlert(
+                    'Berhasil!', 
+                    'Model berhasil diunduh!',
+                    'success',
+                    function() {{ location.reload(); }}
+                );
+            }} else {{
+                showCustomAlert('Gagal', '❌ Gagal: ' + (data.error || 'Unknown error'), 'error');
+            }}
+        }})
+        .catch(function(error) {{
+            console.error('Download error:', error);
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
         }});
     }}
 
@@ -2218,9 +2661,123 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }} else {{
         initImageClassifier();
     }}
-</script>
+
+    // ============ LIVE CHAT ASHLEY JAVASCRIPT ============
+    let isChatOpen = false;
+    let currentContext = {{
+        location: null,
+        lastQuery: null
+    }};
+    
+    function toggleChatWidget() {{
+        const widget = document.getElementById('chatWidget');
+        isChatOpen = !isChatOpen;
+        
+        if (isChatOpen) {{
+            widget.classList.add('open');
+            document.getElementById('chatInput').focus();
+        }} else {{
+            widget.classList.remove('open');
+        }}
+    }}
+    
+    function closeChatWidget() {{
+        const widget = document.getElementById('chatWidget');
+        isChatOpen = false;
+        widget.classList.remove('open');
+    }}
+    
+    function sendSuggestion(text) {{
+        document.getElementById('chatInput').value = text;
+        sendChatMessage();
+    }}
+    
+    function addMessage(text, sender, isTyping = false) {{
+        const messagesContainer = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${{sender}}`;
+        
+        if (isTyping) {{
+            messageDiv.innerHTML = `
+                <div class="message-content typing">
+                    <div class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            messageDiv.id = 'typingIndicator';
+        }} else {{
+            messageDiv.innerHTML = `<div class="message-content">${{text}}</div>`;
+        }}
+        
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        return messageDiv;
+    }}
+    
+    function removeTypingIndicator() {{
+        const typing = document.getElementById('typingIndicator');
+        if (typing) typing.remove();
+    }}
+    
+    async function sendChatMessage() {{
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        
+        if (!message) return;
+        
+        addMessage(escapeHtml(message), 'user');
+        input.value = '';
+        
+        addMessage('', 'bot', true);
+        
+        try {{
+            const response = await fetch('/chat-ashley', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({{ 
+                    message: message,
+                    context: currentContext 
+                }})
+            }});
+            
+            const data = await response.json();
+            removeTypingIndicator();
+            addMessage(data.reply, 'bot');
+            
+            if (data.detected_location) {{
+                currentContext.location = data.detected_location;
+            }}
+            
+        }} catch (error) {{
+            console.error('Chat error:', error);
+            removeTypingIndicator();
+            addMessage('Maaf, saya sedang bermasalah. Coba lagi ya! 😊', 'bot');
+        }}
+    }}
+    
+    function escapeHtml(text) {{
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }}
+    
+    document.addEventListener('click', function(event) {{
+        const widget = document.getElementById('chatWidget');
+        const toggleBtn = document.getElementById('chatToggleBtn');
+        
+        if (isChatOpen && widget && toggleBtn) {{
+            if (!widget.contains(event.target) && !toggleBtn.contains(event.target)) {{
+                closeChatWidget();
+            }}
+        }}
+    }});
+    </script>
 </body>
 </html>"""
+    return html_content
 
 # ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
@@ -2377,7 +2934,6 @@ async def home(request: Request):
 
     return HTMLResponse(content=render_page(content, active="home", saved_locations=saved_locations, selected_location=selected_location))
 
-
 # ============ ROUTE MAIN (ML) ============
 @app.get("/main", response_class=HTMLResponse)
 async def ml_dashboard(request: Request):
@@ -2430,9 +2986,8 @@ async def ml_dashboard(request: Request):
                 </div>
             </div>
             <form method="GET" action="/train-model" style="margin-top: 24px;" id="trainForm">
-                <button type="submit" class="train-btn" style="width: 100%;">
-                    <i class="fas fa-sync-alt"></i> Latih Ulang Model ML
-                </button>
+                <button type="submit" class="train-btn-ml" style="width: 100%;">
+                <i class="fas fa-sync-alt"></i> Latih Ulang Model</button>
             </form>
         </div>
         """
@@ -2447,12 +3002,20 @@ async def ml_dashboard(request: Request):
                 <p style="color: var(--text-tertiary); margin-bottom: 24px;">Klik tombol di bawah untuk melatih model Random Forest Regressor</p>
                 <form method="GET" action="/train-model" id="trainForm">
                     <button type="submit" class="train-btn">
-                        <i class="fas fa-play"></i> Latih Model ML Sekarang
+                        Latih Model Sekarang
                     </button>
                 </form>
             </div>
         </div>
         """
+
+    cnn_model_exists = os.path.exists(MODEL_CKPT_PATH)
+    if cnn_model_exists:
+        cnn_btn_text = "Model Sudah Dilatih"
+        cnn_btn_disabled = "disabled"
+    else:
+        cnn_btn_text = "Latih Model (Upload Dataset)"
+        cnn_btn_disabled = ""
 
     image_classifier_html = f"""
     <div class="glass-card" style="height: 100%;">
@@ -2500,11 +3063,9 @@ async def ml_dashboard(request: Request):
                 <p style="margin-top: 12px;">Menganalisis gambar...</p>
             </div>
 
-            <button onclick="trainImageClassifier()" class="train-btn" style="margin-top: 20px; width: 100%; background: linear-gradient(135deg, #10b981, #059669);">
-                <i class="fas fa-database"></i> Latih Model CNN (Upload Dataset)
-            </button>
+            <button onclick="trainImageClassifier()" class="train-btn-green" {cnn_btn_disabled}>{cnn_btn_text}</button>
             <p style="font-size: 11px; color: var(--text-tertiary); text-align: center; margin-top: 12px;">
-                *pastikan gambar memiliki resolusi yang cukup dan jelas untuk hasil terbaik. Dataset harus memiliki struktur folder dengan subfolder untuk setiap kelas cuaca (misal: ./weather_dataset/cerah, ./weather_dataset/hujan, dll) dan masing-masing subfolder berisi gambar-gambar terkait.
+                *pastikan gambar memiliki kualitas yang baik dan jelas
             </p>
         </div>
     </div>
@@ -2560,7 +3121,6 @@ async def ml_dashboard(request: Request):
     """
 
     return HTMLResponse(content=render_page(content, active="ml", saved_locations=saved_locations, selected_location=selected_location))
-
 
 # ============ ROUTE TULIS ULASAN ============
 @app.get("/ulasan", response_class=HTMLResponse)
@@ -2697,18 +3257,17 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
     </div>
 
     <script>
-        // Rating star functionality
-        const stars = document.querySelectorAll('.rating-star');
-        const ratingInput = document.getElementById('ratingValue');
-        let selectedRating = 0;
+        var stars = document.querySelectorAll('.rating-star');
+        var ratingInput = document.getElementById('ratingValue');
+        var selectedRating = 0;
         
-        stars.forEach(star => {{
+        stars.forEach(function(star) {{
             star.addEventListener('click', function() {{
                 selectedRating = parseInt(this.dataset.value);
                 ratingInput.value = selectedRating;
                 
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= selectedRating) {{
                         s.classList.add('selected');
                     }} else {{
@@ -2718,9 +3277,9 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
             
             star.addEventListener('mouseenter', function() {{
-                const hoverVal = parseInt(this.dataset.value);
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                var hoverVal = parseInt(this.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= hoverVal) {{
                         s.style.color = '#fbbf24';
                     }} else {{
@@ -2730,8 +3289,8 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
             
             star.addEventListener('mouseleave', function() {{
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= selectedRating) {{
                         s.style.color = '#fbbf24';
                     }} else {{
@@ -2741,14 +3300,13 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
         }});
         
-        // Character counter
-        const textarea = document.querySelector('textarea[name="comment"]');
-        const charCount = document.getElementById('charCount');
+        var textarea = document.querySelector('textarea[name="comment"]');
+        var charCount = document.getElementById('charCount');
         
         textarea.addEventListener('input', function() {{
-            const length = this.value.length;
+            var length = this.value.length;
             charCount.textContent = length;
-            const counter = document.querySelector('.char-counter');
+            var counter = document.querySelector('.char-counter');
             if (length > 200) {{
                 counter.classList.add('warning');
             }} else {{
@@ -2773,7 +3331,6 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
     
     return HTMLResponse(content=render_page(content, active="ulasan", saved_locations=saved_locations, selected_location=selected_location, message=message, message_type=type))
 
-
 @app.post("/ulasan/submit")
 async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: str = Form(...), rating: int = Form(...)):
     if len(comment) > 250:
@@ -2782,28 +3339,17 @@ async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: s
     save_testimonial(name, role, comment, rating)
     return RedirectResponse(url="/ulasan?message=Terima kasih! Ulasan Anda telah disimpan&type=success", status_code=303)
 
-
-# ============ ROUTE DELETE TESTIMONIAL (LAMA) - DINONAKTIFKAN ============
-# @app.get("/delete-testimonial/{testimonial_id}")
-# async def delete_testimonial_route(testimonial_id: int):
-#     delete_testimonial_by_id(testimonial_id)
-#     return RedirectResponse(url="/about?message=Testimonial berhasil dihapus&type=success", status_code=303)
-
-
-# ============ ROUTE VERIFY DELETE TESTIMONIAL (BARU - AMAN) ============
+# ============ ROUTE VERIFY DELETE TESTIMONIAL ============
 @app.post("/verify-delete-testimonial/{testimonial_id}")
 async def verify_delete_testimonial(testimonial_id: int, request: PasswordRequest):
-    # Cek apakah password disediakan di environment variable
     if not ADMIN_PASSWORD:
         return {"success": False, "message": "Password belum dikonfigurasi di server"}
     
-    # Verifikasi password
     if request.password == ADMIN_PASSWORD:
         delete_testimonial_by_id(testimonial_id)
         return {"success": True, "message": "Ulasan berhasil dihapus"}
     else:
         return {"success": False, "message": "Password salah!"}
-
 
 # ============ ROUTE SEARCH ============
 @app.get("/search", response_class=HTMLResponse)
@@ -2833,7 +3379,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 </div>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
-                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah. Mendukung semua kota di dunia.
+                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah yang ingin Anda cari.
             </p>
         </div>
 
@@ -2862,8 +3408,8 @@ async def search_page(request: Request, message: str = None, type: str = None):
                                style="width: 100%; border-radius: 50px; padding: 12px 16px;">
                     </div>
                 </div>
-                <button type="submit" class="search-btn" style="width: 100%;">
-                    <i class="fas fa-location-dot"></i> Cari & Simpan dari Koordinat
+                <button type="submit" class="search-btn" style="display: flex; justify-content: center; align-items: center; width: 100%;">
+                    <i class="fas fa-search"></i> Cari dari Koordinat
                 </button>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
@@ -2905,8 +3451,8 @@ async def search_page(request: Request, message: str = None, type: str = None):
 
     <script>
         function setCoordinates(lat, lon) {{
-            const latInput = document.querySelector('input[name="latitude"]');
-            const lonInput = document.querySelector('input[name="longitude"]');
+            var latInput = document.querySelector('input[name="latitude"]');
+            var lonInput = document.querySelector('input[name="longitude"]');
 
             if (latInput && lonInput) {{
                 latInput.value = lat;
@@ -2917,7 +3463,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 latInput.style.borderColor = '#10b981';
                 lonInput.style.borderColor = '#10b981';
 
-                setTimeout(() => {{
+                setTimeout(function() {{
                     latInput.style.borderColor = '';
                     lonInput.style.borderColor = '';
                 }}, 2000);
@@ -2927,7 +3473,6 @@ async def search_page(request: Request, message: str = None, type: str = None):
     """
 
     return HTMLResponse(content=render_page(content=content, active="search", message=message, message_type=type, saved_locations=saved_locations, selected_location=selected_location))
-
 
 @app.post("/search/city", response_class=HTMLResponse)
 async def search_city_post(city_name: str = Form(...)):
@@ -2940,7 +3485,6 @@ async def search_city_post(city_name: str = Form(...)):
         return RedirectResponse(url=f"/search?message={result['name']} berhasil ditambahkan ke favorit&type=success", status_code=303)
     else:
         return RedirectResponse(url=f"/search?message=Kota '{city_name}' tidak ditemukan. Periksa ejaan Anda.&type=error", status_code=303)
-
 
 @app.post("/search/coords", response_class=HTMLResponse)
 async def search_coords_post(latitude: float = Form(...), longitude: float = Form(...)):
@@ -2955,10 +3499,9 @@ async def search_coords_post(latitude: float = Form(...), longitude: float = For
         save_location(result["name"], result["latitude"], result["longitude"], result["country"], result["timezone"])
 
         coords_text = f"{latitude:.4f}, {longitude:.4f}"
-        return RedirectResponse(url=f"/search?message=📍 {result['name']} ({coords_text}) berhasil ditambahkan ke favorit&type=success", status_code=303)
+        return RedirectResponse(url=f"/search?message={result['name']} ({coords_text}) berhasil ditambahkan ke favorit&type=success", status_code=303)
     else:
-        return RedirectResponse(url=f"/search?message=❌ Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
-
+        return RedirectResponse(url=f"/search?message=Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
 
 # ============ ROUTE ABOUT ============
 @app.get("/about", response_class=HTMLResponse)
@@ -2966,7 +3509,6 @@ async def about_page(request: Request, message: str = None, type: str = None):
     saved_locations = get_saved_locations()
     testimonials = get_all_testimonials()
     
-    # Generate testimonial HTML dengan scrollable horizontal
     testimonial_items = ""
     if testimonials:
         for t in testimonials:
@@ -3229,19 +3771,18 @@ async def about_page(request: Request, message: str = None, type: str = None):
     </div>
 
     <script>
-        const scrollContainer = document.getElementById('testimonialsScroll');
+        var scrollContainer = document.getElementById('testimonialsScroll');
         if (scrollContainer) {{
-            let isDown = false, startX, scrollLeft;
-            scrollContainer.addEventListener('mousedown', (e) => {{ isDown = true; scrollContainer.style.cursor = 'grabbing'; startX = e.pageX - scrollContainer.offsetLeft; scrollLeft = scrollContainer.scrollLeft; }});
-            scrollContainer.addEventListener('mouseleave', () => {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
-            scrollContainer.addEventListener('mouseup', () => {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
-            scrollContainer.addEventListener('mousemove', (e) => {{ if (!isDown) return; e.preventDefault(); const x = e.pageX - scrollContainer.offsetLeft; scrollContainer.scrollLeft = scrollLeft - (x - startX) * 2; }});
+            var isDown = false, startX, scrollLeft;
+            scrollContainer.addEventListener('mousedown', function(e) {{ isDown = true; scrollContainer.style.cursor = 'grabbing'; startX = e.pageX - scrollContainer.offsetLeft; scrollLeft = scrollContainer.scrollLeft; }});
+            scrollContainer.addEventListener('mouseleave', function() {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
+            scrollContainer.addEventListener('mouseup', function() {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
+            scrollContainer.addEventListener('mousemove', function(e) {{ if (!isDown) return; e.preventDefault(); var x = e.pageX - scrollContainer.offsetLeft; scrollContainer.scrollLeft = scrollLeft - (x - startX) * 2; }});
         }}
     </script>
     """
 
     return HTMLResponse(content=render_page(content, active="about", saved_locations=saved_locations, message=message, message_type=type))
-
 
 # ============ ROUTE LOCATION ============
 @app.get("/select-location/{location_id}")
@@ -3268,12 +3809,10 @@ async def select_location(location_id: int):
         }
     return RedirectResponse(url="/", status_code=303)
 
-
 @app.get("/delete-location/{location_id}")
 async def delete_location_route(location_id: int):
     delete_location(location_id)
     return RedirectResponse(url="/?message=Lokasi berhasil dihapus&type=success", status_code=303)
-
 
 # ============ ROUTE TRAIN MODEL ============
 @app.get("/train-model")
@@ -3286,12 +3825,36 @@ async def train_model_route(request: Request):
         result = weather_predictor.train_model(selected_location["name"], selected_location["latitude"], selected_location["longitude"])
         if is_ajax:
             return {"success": True, "mae": result["mae"], "r2": result["r2"]}
-        return RedirectResponse(url=f"/main?message=✅ Model ML berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
+        return RedirectResponse(url=f"/main?message=Model berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
     except Exception as e:
         if is_ajax:
             return {"success": False, "error": str(e)}
-        return RedirectResponse(url=f"/main?message=❌ Gagal melatih model: {str(e)}&type=error", status_code=303)
+        return RedirectResponse(url=f"/main?message=Gagal melatih model: {str(e)}&type=error", status_code=303)
 
+# ============ ROUTE DOWNLOAD CNN MODEL ============
+@app.post("/download-cnn-model")
+async def download_cnn_model():
+    try:
+        if not TF_AVAILABLE:
+            return {"success": False, "error": "TensorFlow tidak tersedia"}
+        
+        success = download_model_from_gdrive()
+        
+        if not success:
+            return {"success": False, "error": "Gagal download model dari Google Drive"}
+        
+        weather_image_classifier.load_model()
+        
+        if weather_image_classifier.model is None:
+            return {"success": False, "error": "Gagal memuat model CNN"}
+        
+        return {"success": True, "message": "Model berhasil di-download dan dimuat"}
+        
+    except Exception as e:
+        print(f"Error in download_cnn_model: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 # ============ ROUTE PREDICT IMAGE ============
 @app.post("/predict-weather-image")
@@ -3321,7 +3884,6 @@ async def predict_weather_from_image(file: UploadFile = File(...)):
         print(f"Error predict image: {e}")
         return {"success": False, "error": str(e)}
 
-
 @app.post("/train-image-classifier")
 async def train_image_classifier_route(dataset_path: str):
     try:
@@ -3338,6 +3900,34 @@ async def train_image_classifier_route(dataset_path: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+# ============ LIVE CHAT ASHLEY ENDPOINT ============
+class ChatRequest(BaseModel):
+    message: str
+    context: dict = {}
+
+@app.post("/chat-ashley")
+async def chat_ashley(request: ChatRequest):
+    global selected_location
+    
+    user_message = request.message
+    context = request.context
+    current_location = context.get("location") or selected_location["name"]
+    
+    # Ambil data cuaca untuk lokasi yang sedang aktif
+    weather = get_current_weather(selected_location["latitude"], selected_location["longitude"])
+    forecast = get_6day_forecast(selected_location["latitude"], selected_location["longitude"])
+    air_quality = get_air_quality(selected_location["latitude"], selected_location["longitude"])
+    
+    # Proses dengan Ashley Chatbot
+    result = ashley_chatbot.process_input(
+        user_message, 
+        weather, 
+        forecast, 
+        air_quality, 
+        current_location
+    )
+    
+    return result
 
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8001)
