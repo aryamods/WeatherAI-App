@@ -1143,18 +1143,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="/static/styles.css">
-<script>
-    // Cek apakah CSS terload
-    fetch('/static/styles.css')
-        .then(response => {
-            if (!response.ok) {
-                console.warn('CSS tidak ditemukan, menggunakan fallback');
-                // Load CSS dari CDN jika perlu
-            }
-        })
-        .catch(() => console.warn('Gagal load CSS'));
-</script>
+    <link rel="stylesheet" href="./static/styles.css">
     {location_data}
     <style>
         /* Custom Alert/Notification Styles */
