@@ -3983,149 +3983,65 @@ async def train_image_classifier_route(dataset_path: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ============ AI CHAT ASHLEY ENDPOINT ============
+# ============ AI CHAT ASHLEY ENDPOINT (DIPERBAIKI) ============
 @app.post("/chat-ai")
 async def chat_ai(chat: ChatMessage):
-    """Endpoint untuk chat AI Ashley dengan topik cuaca dan aktivitas terkait cuaca"""
+    """Endpoint untuk chat AI Ashley dengan batasan topik cuaca"""
     user_message = chat.message.strip()
     
     if not user_message:
         return {"reply": "Silakan tulis pesan Anda terlebih dahulu."}
     
-    # Kata kunci yang diperbolehkan (topik cuaca dan aktivitas terkait cuaca)
-    allowed_keywords = [
-        # Cuaca dasar
+    # Cek apakah pertanyaan terkait cuaca
+    weather_keywords = [
         "cuaca", "weather", "hujan", "rain", "cerah", "sunny", "berawan", "cloudy",
-        "mendung", "overcast", "badai", "storm", "petir", "thunder", "angin", "wind",
-        "suhu", "temperature", "panas", "hot", "dingin", "cold", "lembab", "humidity",
-        "tekanan", "pressure", "udara", "air",
-        
-        # Fenomena cuaca
-        "kabut", "fog", "asap", "smoke", "salju", "snow", "hujan es", "hail",
-        "topan", "typhoon", "angin topan", "cyclone", "banjir", "flood", "kekeringan", "drought",
-        
-        # Kualitas udara
-        "kualitas udara", "air quality", "aqi", "pm2.5", "pm10", "polusi", "pollution",
-        "bersih", "sehat", "tidak sehat",
-        
-        # UV dan sinar matahari
-        "uv", "ultraviolet", "sinar matahari", "sunlight", "matahari",
-        
-        # Aktivitas luar ruangan (terkait cuaca)
-        "keluar", "luar ruangan", "outdoor", "berjalan", "walk", "lari", "run", "olahraga", "exercise",
-        "bersepeda", "bike", "jalan-jalan", "travel", "buka jendela", "ventilasi",
-        "aman", "safe", "berbahaya", "dangerous", "disarankan", "recommended",
-        "jaket", "payung", "umbrella", "topi", "hat", "tabir surya", "sunscreen",
-        "masker", "mask", "kaca mata", "sunglasses",
-        
-        # Prakiraan
-        "prakiraan", "forecast", "prediksi", "prediction", "besok", "tomorrow",
-        "hari ini", "hari", "minggu", "week", "bulan", "month", "update cuaca",
-        
-        # Musim dan iklim
-        "musim", "season", "iklim", "climate", "kemarau", "dry", "penghujan", "rainy",
-        
-        # Pertanyaan umum tentang cuaca
-        "bagaimana", "how", "apa", "what", "kenapa", "why", "kapan", "when",
-        "rekomendasi", "recommendation", "tips", "tip", "saran", "advice",
-        
-        # Sapaan dan perkenalan
-        "hai", "hello", "halo", "hey", "assalamualaikum", "selamat", "pagi", "siang", "sore", "malam",
-        "siapa", "kamu", "anda", "ashley", "perkenalan", "nama", "help", "bantuan"
-    ]
-    
-    # Kata kunci yang dilarang (benar-benar di luar topik cuaca)
-    forbidden_keywords = [
-        "politik", "presiden", "pemilu", "korupsi", "partai", "parlemen", "dpr",
-        "agama", "islam", "kristen", "hindu", "buddha", "konghucu", "gereja", "masjid", "pura", "vihara",
-        "seks", "porno", "bokep", "mesum", "zina", "maksiat",
-        "narkoba", "narkotik", "sabu", "ganja", "kokain", "heroin", "psikotropika",
-        "judi", "togel", "slot", "casino", "poker", "qq", "domino",
-        "senjata", "api", "tembak", "bom", "teroris", "teror",
-        "crypto", "bitcoin", "ethereum", "dogecoin", "investasi bodong", "scam",
-        "saham", "forex", "binary option", "trading", "margin call",
-        "pinjaman", "kredit", "hutang", "utang", "rentenir", "bank",
-        "resep masak", "memasak", "recipe", "bumbu", "dapur",
-        "film", "drama", "sinetron", "aktor", "artis", "selebriti", "gosip",
-        "perselingkuhan", "selingkuh", "cerai", "perceraian", "rumah tangga",
-        "bola", "sepakbola", "football", "liga", "champions league", "world cup",
+        "suhu", "temperature", "angin", "wind", "lembab", "humidity", "tekanan", "pressure",
+        "uv", "ultraviolet", "kualitas udara", "air quality", "aqi", "pm2.5", "pm10",
+        "prakiraan", "forecast", "prediksi", "prediction", "musim", "season", "iklim", "climate",
+        "badai", "storm", "petir", "thunder", "topan", "cyclone", "panas", "hot", "dingin", "cold",
+        "kabut", "fog", "salju", "snow", "gemini", "ashley", "weather ai", "cuaca hari ini",
+        "besok", "tomorrow", "hari ini", "hari", "minggu", "week", "update cuaca", "gerimis", "lebat"
     ]
     
     message_lower = user_message.lower()
     
-    # Cek apakah mengandung kata terlarang
-    is_forbidden = any(kw in message_lower for kw in forbidden_keywords)
+    # Kata kunci yang menandakan topik di luar cuaca
+    off_topic_keywords = [
+        "politik", "presiden", "pemilu", "korupsi", "agama", "islam", "kristen", "hindu", "buddha",
+        "seks", "porn", "narkoba", "judi", "togel", "sabung", "ayam", "senjata", "bom", "teroris",
+        "crypto", "investasi", "saham", "forex", "bisnis", "uang", "kaya", "miskin", "pekerjaan",
+        "gaji", "hutang", "pinjaman", "kredit", "resep", "masak", "makanan", "film", "aktor", "artis",
+        "gosip", "skandal", "perselingkuhan", "cerai", "nikah", "pernikahan", "sepak bola", "bola"
+    ]
     
-    # Cek apakah mengandung kata yang diperbolehkan
-    is_allowed = any(kw in message_lower for kw in allowed_keywords)
+    # Cek apakah pertanyaan off-topic
+    is_off_topic = any(kw in message_lower for kw in off_topic_keywords)
     
-    # Pertanyaan tentang keselamatan keluar ruangan (spesifik)
-    safety_questions = ["aman ke luar", "aman keluar", "boleh keluar", "boleh ke luar", 
-                        "keluar rumah", "ke luar ruangan", "aktivitas luar", "outdoor activity"]
-    is_safety_question = any(q in message_lower for q in safety_questions)
+    # Cek apakah ada keyword cuaca
+    has_weather_keyword = any(kw in message_lower for kw in weather_keywords)
     
-    # Jika mengandung kata terlarang dan tidak ada kata yang diperbolehkan
-    if is_forbidden and not is_allowed:
+    # Pertanyaan sapaan umum yang masih diperbolehkan
+    greetings = ["hai", "hello", "halo", "hey", "assalamualaikum", "selamat pagi", "selamat siang", "selamat sore", "selamat malam"]
+    is_greeting = any(msg in message_lower for msg in greetings)
+    
+    # Pertanyaan tentang Ashley
+    ashley_questions = ["siapa kamu", "kamu siapa", "nama kamu", "anda siapa", "ashley", "perkenalan"]
+    is_ashley_question = any(q in message_lower for q in ashley_questions)
+    
+    if is_off_topic and not has_weather_keyword and not is_greeting:
         return {
-            "reply": "🌤️ *Maaf, saya hanya bisa membantu pertanyaan tentang cuaca dan aktivitas yang terkait dengan cuaca!*\n\nSaya adalah asisten cuaca cerdas Ashley. Silakan tanyakan hal-hal seperti:\n• Cuaca hari ini / besok\n• Prakiraan cuaca\n• Suhu, kelembaban, angin\n• Kualitas udara\n• Aktivitas luar ruangan (olahraga, jalan-jalan, dll)\n• Tips menghadapi cuaca tertentu\n• Rekomendasi pakaian/perlengkapan\n\nAda yang bisa saya bantu terkait cuaca?"
+            "reply": "🌤️ *Maaf, saya hanya bisa membantu pertanyaan tentang cuaca!*\n\nSaya adalah asisten cuaca cerdas Ashley. Silakan tanyakan hal-hal seperti:\n• Cuaca hari ini / besok\n• Prakiraan cuaca\n• Suhu, kelembaban, angin\n• Kualitas udara\n• Tips menghadapi cuaca tertentu\n\nAda yang bisa saya bantu terkait cuaca?"
         }
     
-    # Pertanyaan tentang keselamatan (dijawab berdasarkan data cuaca)
-    if is_safety_question or ("keluar" in message_lower and "aman" in message_lower):
-        try:
-            lat = selected_location.get("latitude", -6.2)
-            lon = selected_location.get("longitude", 106.816666)
-            location_name = selected_location.get("name", "lokasi Anda")
-            
-            weather = get_current_weather(lat, lon)
-            air_quality = get_air_quality(lat, lon)
-            
-            condition = get_condition_text(weather.get("weather_code", 0))
-            temp = int(weather.get("temperature", 0))
-            aqi = air_quality.get("aqi", 0)
-            aqi_status = air_quality.get("status", "Baik")
-            uv = weather.get("uv_index", 5)
-            
-            # Logika penentuan keamanan berdasarkan data cuaca
-            is_safe = True
-            warnings = []
-            
-            if "hujan" in condition.lower() and weather.get("precipitation", 0) > 5:
-                is_safe = False
-                warnings.append("hujan lebat")
-            
-            if aqi > 150:
-                is_safe = False
-                warnings.append(f"kualitas udara tidak sehat (AQI {aqi})")
-            elif aqi > 100:
-                warnings.append(f"kualitas udara sedang (AQI {aqi}) - kelompok sensitif perlu hati-hati")
-            
-            if uv > 8:
-                warnings.append(f"paparan UV sangat tinggi ({uv}) - gunakan tabir surya")
-            elif uv > 6:
-                warnings.append(f"paparan UV tinggi ({uv}) - disarankan perlindungan")
-            
-            if temp > 35:
-                warnings.append(f"suhu sangat panas ({temp}°C) - jaga hidrasi")
-            elif temp > 32:
-                warnings.append(f"suhu cukup panas ({temp}°C) - minum air yang cukup")
-            
-            if is_safe and not warnings:
-                reply = f"✅ **Aman untuk keluar ruangan!**\n\nCuaca di {location_name} saat ini {condition} dengan suhu {temp}°C. Kualitas udara {aqi_status} (AQI {aqi}). Tidak ada kondisi yang mengkhawatirkan. Tetap jaga kesehatan dan bawa air minum ya! ☀️"
-            elif is_safe and warnings:
-                reply = f"⚠️ **Boleh keluar ruangan, tapi perhatikan hal berikut:**\n\nCuaca di {location_name}: {condition}, {temp}°C\n\n📌 Tips: " + ", ".join(warnings) + "\n\nSecara umum masih aman, tapi tetap waspada dan persiapkan diri dengan baik! 🌤️"
-            else:
-                reply = f"⚠️ **Sebaiknya batasi aktivitas luar ruangan!**\n\nCuaca di {location_name} saat ini {condition} dengan suhu {temp}°C.\n\n⚠️ Peringatan: " + ", ".join(warnings) + "\n\n🔹 Jika terpaksa keluar, gunakan masker, topi, dan perlindungan yang sesuai. Jaga kesehatan! 🏠"
-            
-            return {"reply": reply}
-            
-        except Exception as e:
-            print(f"Safety check error: {e}")
-            # Fallback
-    
-    if not is_allowed and not is_greeting and not is_ashley_question:
+    if is_ashley_question:
         return {
-            "reply": "🌤️ *Saya asisten cuaca Ashley!*\n\nSaya bisa membantu Anda dengan:\n• Informasi cuaca real-time\n• Prakiraan cuaca\n• Kualitas udara\n• Tips aktivitas luar ruangan\n• Rekomendasi pakaian & perlengkapan\n\nSilakan tanyakan tentang cuaca di lokasi Anda! ☁️"
+            "reply": "Halo! Saya *Ashley* 👋\n\nSaya adalah asisten cuaca cerdas berbasis AI yang siap membantu Anda dengan:\n✅ Informasi cuaca real-time\n✅ Prakiraan cuaca\n✅ Analisis kualitas udara\n✅ Tips & rekomendasi cuaca\n\nTanyakan apapun tentang cuaca, dan saya akan dengan senang hati membantu! ☁️🌤️"
+        }
+    
+    # Jika hanya sapaan
+    if is_greeting and not has_weather_keyword and len(user_message.split()) < 4:
+        return {
+            "reply": "Halo! Selamat datang di WeatherAI ☁️\n\nAda yang bisa saya bantu tentang cuaca hari ini? Silakan tanyakan prakiraan cuaca, suhu, atau kondisi cuaca di lokasi Anda!"
         }
     
     # Dapatkan data cuaca saat ini untuk konteks
@@ -4140,69 +4056,107 @@ async def chat_ai(chat: ChatMessage):
         
         condition = get_condition_text(weather.get("weather_code", 0))
         
-        # Prompt yang lebih luas untuk Gemini
-        prompt = f"""Kamu adalah Ashley, asisten cuaca yang ramah, informatif, dan helpful. Jawab pertanyaan pengguna dengan gaya ngobrol yang natural, hangat, dan mudah dipahami.
+        # Buat prompt untuk Gemini dengan konteks cuaca
+        # TIDAK ADA BATASAN KATA DI PROMPT INI!
+        prompt = f"""Kamu adalah Ashley, asisten cuaca yang santai dan profesional. Jawab pertanyaan pengguna tentang cuaca dengan lengkap, informatif, dan natural. Gunakan bahasa Indonesia yang santai tapi tetap informatif.
 
 DATA CUACA REAL-TIME ({location_name}):
 - Suhu: {int(weather.get('temperature', 0))}°C
 - Kondisi: {condition}
 - Kelembaban: {int(weather.get('humidity', 0))}%
 - Angin: {int(weather.get('wind_speed', 0))} km/j
-- Curah hujan: {weather.get('precipitation', 0):.1f} mm
-- Tekanan: {int(weather.get('pressure', 0))} hPa
-- UV Index: {weather.get('uv_index', 5):.1f}
-
-KUALITAS UDARA:
-- Status: {air_quality.get('status', 'Baik')} (AQI {air_quality.get('aqi', 0)})
-- PM2.5: {air_quality.get('pm25', 0)} µg/m³
-- PM10: {air_quality.get('pm10', 0)} µg/m³
+- Kualitas Udara: {air_quality.get('status', 'Baik')} (AQI {air_quality.get('aqi', 0)})
 
 PERTANYAAN PENGGUNA: "{user_message}"
 
-PANDUAN JAWABAN:
-1. Gunakan data cuaca di atas untuk memberikan jawaban yang akurat
-2. Jika ditanya tentang aktivitas luar ruangan, berikan rekomendasi berdasarkan cuaca
-3. Jika ditanya rekomendasi pakaian, sesuaikan dengan suhu dan kondisi cuaca
-4. Jika ditanya tentang keamanan, jelaskan risiko berdasarkan data cuaca
-5. Jawaban singkat, padat, dan informatif (maksimal 100 kata)
-6. Gunakan emoji yang relevan untuk membuat jawaban lebih engaging
-7. Bahasa Indonesia yang natural dan ramah
+PANDUAN:
+1. Jawab hanya terkait cuaca
+2. Gunakan data cuaca di atas jika relevan
+3. Jika ditanya prakiraan, beri gambaran dari data yang tersedia
+4. Jika ditanya di luar cuaca, tolak dengan sopan
+5. Jawab dengan LENGKAP dan INFORMATIF (minimal 50 kata, maksimal 150 kata)
+6. Sertakan emoji yang relevan
+7. PASTIKAN JAWABAN SELESAI dengan kalimat utuh, jangan berhenti di tengah!
 
 JAWABAN:"""
 
+        reply = None
+        
         if AI_AVAILABLE and gemini_rotator:
-            response = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=2)
+            response_text = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
             
-            if response:
-                reply = response
-                if len(reply) > 400:
-                    reply = reply[:400] + "..."
-            else:
-                # Fallback response yang lebih pintar
-                if "aman" in message_lower or "keluar" in message_lower:
-                    if air_quality.get("aqi", 0) > 100:
-                        reply = f"☁️ Cuaca di {location_name} saat ini {condition} dengan suhu {int(weather.get('temperature', 0))}°C. Kualitas udara {air_quality.get('status', 'Baik')} (AQI {air_quality.get('aqi', 0)}). Untuk kondisi ini, sebaiknya batasi aktivitas luar ruangan jika Anda memiliki riwayat gangguan pernapasan. Gunakan masker jika tetap ingin keluar. 😷"
-                    else:
-                        reply = f"☀️ Cuaca di {location_name} saat ini {condition} dengan suhu {int(weather.get('temperature', 0))}°C. Kondisi cukup bersahabat untuk keluar ruangan. Jangan lupa bawa air minum dan gunakan tabir surya ya! 🌞"
-                elif "pakaian" in message_lower or "baju" in message_lower or "jaket" in message_lower:
-                    temp = int(weather.get('temperature', 0))
-                    if temp > 30:
-                        reply = f"🥵 Suhu di {location_name} mencapai {temp}°C! Pakailah pakaian berbahan katun yang menyerap keringat. Topi dan kacamata hitam juga direkomendasikan. Jangan lupa bawa air minum! 💧"
-                    elif temp < 25:
-                        reply = f"🌡️ Suhu di {location_name} {temp}°C, cukup sejuk. Bawa jaket tipis jika Anda keluar, terutama jika beraktivitas hingga malam hari. 🧥"
-                    else:
-                        reply = f"🌤️ Suhu di {location_name} {temp}°C, nyaman untuk pakaian santai seperti kaos dan celana pendek. Tetap bawa jaket tipis jika Anda sensitif terhadap AC atau angin malam. 👕"
+            if response_text:
+                word_count = len(response_text.split())
+                print(f"INFO:    Chat response received (panjang: {word_count} kata)")
+                
+                # Validasi panjang response seperti di AI Insights
+                if word_count < 50 or word_count > 180:
+                    print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback yang lebih baik")
+                    # Fallback yang lebih baik
+                    uv = weather.get('uv_index', 5)
+                    aqi = air_quality.get('aqi', 0)
+                    aqi_status = air_quality.get('status', 'Baik')
+                    
+                    reply = f"Hai! 👋 Dengan suhu {int(weather.get('temperature', 0))}°C dan kelembaban {int(weather.get('humidity', 0))}%, cuaca terasa { 'gerah' if weather.get('humidity', 0) > 70 else 'normal'}."
+                    
+                    if weather.get('uv_index', 0) > 6:
+                        reply += f" **UV Index {weather.get('uv_index', 0):.1f}** cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
+                    
+                    if aqi > 100:
+                        reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). 😷 Sebaiknya pakai masker jika beraktivitas di luar."
+                    
+                    reply += f" {get_ai_insights_fallback(weather, forecast, air_quality, location_name)[:200]}"
                 else:
-                    reply = f"☁️ Cuaca di {location_name} saat ini {condition} dengan suhu {int(weather.get('temperature', 0))}°C. Kelembaban {int(weather.get('humidity', 0))}%. Ada yang ingin ditanyakan lagi tentang cuaca? 🌤️"
+                    reply = response_text
+            else:
+                print("INFO:    Gemini returned None, menggunakan fallback")
+                # Fallback yang lebih baik
+                uv = weather.get('uv_index', 5)
+                aqi = air_quality.get('aqi', 0)
+                aqi_status = air_quality.get('status', 'Baik')
+                
+                reply = f"Hai! 👋 Dengan suhu {int(weather.get('temperature', 0))}°C dan kelembaban {int(weather.get('humidity', 0))}%, cuaca terasa { 'gerah' if weather.get('humidity', 0) > 70 else 'normal'}."
+                
+                if weather.get('uv_index', 0) > 6:
+                    reply += f" **UV Index {weather.get('uv_index', 0):.1f}** cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
+                
+                if aqi > 100:
+                    reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). 😷 Sebaiknya pakai masker jika beraktivitas di luar."
+                
+                # Tambahkan jawaban spesifik berdasarkan pertanyaan
+                if "gerimis" in message_lower or "lebat" in message_lower:
+                    reply += " Perbedaan hujan gerimis dan hujan lebat: gerimis memiliki tetesan kecil dan intensitas rendah (<0.5 mm/jam), sementara hujan lebat memiliki tetesan besar dan intensitas tinggi (>7.5 mm/jam) yang bisa menyebabkan genangan air."
+                else:
+                    reply += f" {get_ai_insights_fallback(weather, forecast, air_quality, location_name)[:150]}"
         else:
-            # Fallback response
-            reply = f"☁️ Cuaca di {location_name} saat ini {condition} dengan suhu {int(weather.get('temperature', 0))}°C. Kelembaban {int(weather.get('humidity', 0))}%. Ada yang bisa saya bantu lagi? 🌤️"
+            # Fallback AI tidak tersedia
+            uv = weather.get('uv_index', 5)
+            aqi = air_quality.get('aqi', 0)
+            aqi_status = air_quality.get('status', 'Baik')
+            
+            reply = f"Hai! 👋 Dengan suhu {int(weather.get('temperature', 0))}°C dan kelembaban {int(weather.get('humidity', 0))}%, cuaca terasa { 'gerah' if weather.get('humidity', 0) > 70 else 'normal'}."
+            
+            if weather.get('uv_index', 0) > 6:
+                reply += f" **UV Index {weather.get('uv_index', 0):.1f}** cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
+            
+            if aqi > 100:
+                reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). 😷 Sebaiknya pakai masker jika beraktivitas di luar."
+            
+            if "gerimis" in message_lower or "lebat" in message_lower:
+                reply += " Perbedaan hujan gerimis dan hujan lebat: gerimis memiliki tetesan kecil dan intensitas rendah (<0.5 mm/jam), sementara hujan lebat memiliki tetesan besar dan intensitas tinggi (>7.5 mm/jam) yang bisa menyebabkan genangan air."
+        
+        # Pastikan reply tidak terpotong di tengah kalimat
+        if reply and not reply[-1] in '.!?':
+            # Cari titik terakhir
+            last_period = reply.rfind('.')
+            if last_period > len(reply) * 0.7:  # Jika sudah lewat 70%
+                reply = reply[:last_period+1]
+        
+        return {"reply": reply}
             
     except Exception as e:
         print(f"Chat AI error: {e}")
-        reply = "Maaf, saya sedang mengalami gangguan teknis. Silakan coba lagi nanti. 🙏"
-    
-    return {"reply": reply}
+        return {"reply": "Maaf, saya sedang mengalami gangguan teknis. Silakan coba lagi nanti."}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
