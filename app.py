@@ -18,6 +18,11 @@ import warnings
 from pathlib import Path
 import base64
 import cv2
+import gdown
+import json
+import time
+import random
+from threading import Lock
 
 warnings.filterwarnings("ignore")
 
@@ -29,9 +34,11 @@ app = FastAPI(
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
-
 class PasswordRequest(BaseModel):
     password: str
+
+class ChatMessage(BaseModel):
+    message: str
 
 try:
     import tensorflow as tf
@@ -45,7 +52,7 @@ except ImportError:
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)
     print("\033[92mINFO\033[0m:     python-dotenv tersedia.")
 except ImportError:
     print("\033[92mINFO\033[0m:     python-dotenv tidak tersedia.")
@@ -55,43 +62,197 @@ GEMINI_API_KEY_BACKUP = os.environ.get("GEMINI_API_KEY_BACKUP", "")
 GEMINI_API_KEY_BACKUP2 = os.environ.get("GEMINI_API_KEY_BACKUP2", "")
 GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
 
-def initialize_gemini_client():
-    api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
-    api_keys = [key for key in api_keys if key]
+# ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
+class GeminiRotator:
+    def __init__(self, api_keys):
+        """
+        Inisialisasi rotator untuk multiple API keys
+        """
+        self.keys = []
+        for i, key in enumerate(api_keys):
+            if key:
+                self.keys.append({
+                    'key': key,
+                    'account': f"Account_{i+1}",
+                    'failures': 0,
+                    'cooldown_until': 0,
+                    'used_today': 0,
+                    'last_used': 0
+                })
+        
+        self.current_index = 0
+        self.lock = Lock()
+        self.last_reset = time.time()
+        self.daily_limit = 50  # Batas harian per key (free tier biasanya 50-60)
+        
+        print(f"\033[92mINFO\033[0m:     Gemini Rotator initialized with {len(self.keys)} API keys")
+    
+    def _reset_daily_counter(self):
+        """Reset counter harian setiap 24 jam"""
+        now = time.time()
+        if now - self.last_reset > 86400:  # 24 jam
+            for key in self.keys:
+                key['used_today'] = 0
+            self.last_reset = now
+            print("\033[92mINFO\033[0m:     Daily quota counters reset")
+    
+    def get_best_key(self):
+        """Pilih API key terbaik berdasarkan usage dan cooldown"""
+        with self.lock:
+            self._reset_daily_counter()
+            now = time.time()
+            
+            # Filter key yang tidak dalam cooldown dan belum mencapai limit harian
+            available = []
+            for key in self.keys:
+                if key['cooldown_until'] <= now and key['used_today'] < self.daily_limit:
+                    available.append(key)
+            
+            if not available:
+                # Jika semua key kena cooldown, cari yang paling cepat selesai
+                if self.keys:
+                    min_cooldown = min(k['cooldown_until'] for k in self.keys)
+                    wait_time = min_cooldown - now
+                    if wait_time > 0:
+                        print(f"⚠️ Semua API key dalam cooldown, tunggu {wait_time:.0f} detik")
+                    return None
+                return None
+            
+            return min(available, key=lambda x: x['used_today'])
+    
+    def call_api(self, prompt, model="gemini-2.5-flash", max_retries=3):
+        """
+        Panggil Gemini API dengan rotasi key dan retry logic
+        """
+        for attempt in range(max_retries):
+            key_info = self.get_best_key()
+            
+            if not key_info:
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+                    continue
+                else:
+                    print("INFO:    Tidak ada API key yang tersedia")
+                    return None
+            
+            try:
+                from google import genai
+                
+                print(f"INFO:    Menggunakan {key_info['account']} (used: {key_info['used_today']}/{self.daily_limit})")
+                
+                client = genai.Client(api_key=key_info['key'])
+                
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config={
+                        'temperature': 0.8,
+                        'max_output_tokens': 2000,
+                    }
+                )
+                
+                key_info['used_today'] += 1
+                key_info['failures'] = 0
+                key_info['last_used'] = time.time()
+                
+                time.sleep(0.5)
+                
+                return response.text.strip()
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"⚠️ {key_info['account']} error: {error_msg[:100]}")
+                
+                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                    # Rate limit, set cooldown
+                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)  # Max 5 menit
+                    key_info['cooldown_until'] = time.time() + cooldown_time
+                    key_info['failures'] += 1
+                    print(f"   🔄 Cooldown for {cooldown_time} seconds")
+                    
+                elif "quota" in error_msg.lower():
+                    # Quota habis, cooldown lebih lama
+                    key_info['cooldown_until'] = time.time() + 3600  # 1 jam
+                    key_info['failures'] += 1
+                    print(f"   ⚠️ Quota exhausted, cooldown 1 hour")
+                    
+                else:
+                    # Error lain, cooldown sebentar
+                    key_info['cooldown_until'] = time.time() + 10
+                
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    print(f"   Retry in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+        
+        return None
+    
+    def get_status(self):
+        """Dapatkan status semua API keys"""
+        status = []
+        now = time.time()
+        for key in self.keys:
+            status.append({
+                'account': key['account'],
+                'used_today': key['used_today'],
+                'daily_limit': self.daily_limit,
+                'in_cooldown': key['cooldown_until'] > now,
+                'cooldown_remaining': max(0, key['cooldown_until'] - now),
+                'failures': key['failures']
+            })
+        return status
 
-    if not api_keys:
-        print("\033[92mINFO:\033[0m     API key tidak tersedia.")
-        return None, False
-
-    for i, api_key in enumerate(api_keys, 1):
-        try:
-            client = genai.Client(api_key=api_key)
-            test_response = client.models.generate_content(
-                model="gemini-2.5-flash", contents="Test connection"
-            )
-            print(f"\033[92mINFO\033[0m:     Ashley siap digunakan dengan API Key {i}")
-            print("   Model: gemini-2.5-flash")
-            return client, True
-        except Exception as e:
-            print(f"\033[92mINFO\033[0m:     API Key {i} gagal: {e}")
-            continue
-
-    print("\033[92mINFO\033[0m:     Semua API key gagal. AI features akan dinonaktifkan.")
-    return None, False
-
+# ============ INISIALISASI GEMINI ============
 AI_AVAILABLE = False
-client = None
+gemini_rotator = None
 
 try:
     from google import genai
-    client, AI_AVAILABLE = initialize_gemini_client()
+    
+    api_keys = [GEMINI_API_KEY, GEMINI_API_KEY_BACKUP, GEMINI_API_KEY_BACKUP2, GEMINI_API_KEY_BACKUP3]
+    api_keys = [key for key in api_keys if key]
+    
+    if api_keys:
+        gemini_rotator = GeminiRotator(api_keys)
+        AI_AVAILABLE = True
+        print(f"\033[92mINFO\033[0m:     Gemini AI siap digunakan dengan {len(api_keys)} API keys")
+        print(f"\033[92mINFO\033[0m:     Model yang digunakan: gemini-2.5-flash")
+    else:
+        print("\033[93mWARNING\033[0m: Tidak ada API key yang dikonfigurasi")
+        
 except ImportError:
-    print("\033[92mINFO\033[0m:     Library google-genai belum terinstall.")
+    print("\033[91mERROR\033[0m: Library google-genai belum terinstall.")
+    print("        Install dengan: pip install google-genai")
 except Exception as e:
-    print(f"\033[92mINFO\033[0m:     Error inisialisasi: {e}")
-    AI_AVAILABLE = False
+    print(f"\033[91mERROR\033[0m: Error inisialisasi Gemini: {e}")
 
 DB_PATH = "weather.db"
+
+def download_model_from_gdrive():
+    """Download CNN model from Google Drive if not exists"""
+    model_path = "weather_cnn_model.keras"
+    
+    if os.path.exists(model_path):
+        os.remove(model_path)
+        print("🗑️ Model lama dihapus")
+    
+    print("📥 Downloading CNN model from Google Drive (78MB)...")
+    try:
+        file_id = "13zxQTvCgsj0CJlDyzQyFSaStRaYnb10I"
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, model_path, quiet=False)
+        
+        if os.path.exists(model_path):
+            file_size = os.path.getsize(model_path) / (1024 * 1024)
+            print(f"✅ Model downloaded! Size: {file_size:.2f} MB")
+            return True
+        else:
+            print("❌ Download failed - file not found")
+            return False
+    except Exception as e:
+        print(f"❌ Error downloading model: {e}")
+        return False
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -242,7 +403,6 @@ def delete_testimonial_by_id(testimonial_id: int):
     conn.commit()
     conn.close()
 
-# Inisialisasi database testimonial
 init_testimonials_db()
 
 def get_timezone_from_coords(latitude: float, longitude: float):
@@ -783,7 +943,6 @@ MODEL_CKPT_PATH = "weather_cnn_model.keras"
 class WeatherImageClassifier:
     def __init__(self):
         self.model = None
-        self.load_model()
 
     def build_model(self):
         if not TF_AVAILABLE:
@@ -851,7 +1010,9 @@ class WeatherImageClassifier:
             except Exception as e:
                 print(f"⚠️ Gagal memuat model CNN: {e}")
                 return False
-        return False
+        else:
+            print(f"⚠️ Model CNN belum di-download. Silakan klik tombol 'Download & Load Model CNN'")
+            return False
 
     def predict_image(self, image_bytes: bytes) -> dict:
         if not TF_AVAILABLE:
@@ -860,7 +1021,7 @@ class WeatherImageClassifier:
         if self.model is None:
             self.load_model()
             if self.model is None:
-                return {"error": "Model CNN belum dilatih. Jalankan training terlebih dahulu.", "prediction": None, "confidence": 0}
+                return {"error": "Model CNN belum di-download. Klik tombol 'Download & Load Model CNN' terlebih dahulu.", "prediction": None, "confidence": 0}
 
         try:
             nparr = np.frombuffer(image_bytes, np.uint8)
@@ -993,8 +1154,8 @@ def get_ai_insights_fallback(weather, forecast, air_quality, location_name: str 
     return f"{p1}{p2} {p3} {p4}"
 
 def get_ai_insights_real(weather, forecast, air_quality, location_name: str = None):
-    if not AI_AVAILABLE or client is None:
-        print("⚠️ AI tidak tersedia, menggunakan fallback")
+    if not AI_AVAILABLE or gemini_rotator is None:
+        print("INFO:    AI tidak tersedia, menggunakan fallback")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
 
     location = location_name or "Lokasi Anda"
@@ -1021,10 +1182,10 @@ def get_ai_insights_real(weather, forecast, air_quality, location_name: str = No
             f"hujan {int(day['precipitation'])}mm, UV {day['uv_index']:.1f}"
         )
     forecast_text = "\n".join(forecast_summary)
+    
+    prompt = f"""Anda adalah meteorolog profesional. Tulis analisis cuaca dalam BAHASA INDONESIA.
 
-    prompt = f"""Kamu adalah meteorolog yang ramah. Buat deskripsi cuaca dan kualitas udara untuk {location} dalam 4-5 kalimat (sekitar 100-150 kata). Gaya natural seperti sedang ngobrol.
-
-DATA CUACA:
+DATA CUACA DI {location.upper()}:
 - Suhu: {int(temp)}°C (terasa {int(feels_like)}°C)
 - Kondisi: {condition}
 - Kelembaban: {int(humidity)}%
@@ -1041,31 +1202,46 @@ KUALITAS UDARA:
 PRAKIRAAN 3 HARI:
 {forecast_text}
 
-PANDUAN:
-1. Bahasa Indonesia yang natural dan mengalir
-2. Sertakan informasi kualitas udara secara alami
-3. Beri konteks (misal: "suhu 32°C cukup panas untuk Jakarta")
-4. Jika ada kondisi ekstrem (UV tinggi, AQI buruk, hujan lebat), sebutkan dengan bijak
-5. Akhiri dengan 1 kalimat prakiraan singkat untuk besok
-6. JANGAN gunakan bullet points, JANGAN terlalu panjang (maks 150 kata)
-7. JANGAN gunakan emoji berlebihan, cukup 1-2 saja jika perlu
+CONTOH OUTPUT YANG BENAR (panjang ~120 kata):
+"Saat ini di Jakarta, suhu terasa cukup panas mencapai 32°C meskipun termometer menunjukkan 30°C, karena kelembaban tinggi 78%. Langit cerah dengan indeks UV sangat tinggi 9, disarankan menggunakan tabir surya jika beraktivitas di luar. Kualitas udara hari ini tergolong sedang dengan AQI 85, masih aman namun penderita asma perlu berhati-hati. Angin bertiup pelan 8 km/jam, tidak mengganggu. Untuk besok, diprediksi suhu maksimal 31°C dengan potensi hujan ringan di sore hari. Kondisi ini cukup umum terjadi di musim pancaroba. Kami sarankan Anda tetap membawa payung dan minum air yang cukup untuk menghindari dehidrasi. Secara keseluruhan, cuaca hari ini cukup bersahabat untuk aktivitas luar ruangan, namun tetap waspada terhadap paparan sinar UV yang tinggi."
 
-Mulai menulis:"""
+INSTRUKSI:
+1. TULIS dalam SATU PARAGRAF yang mengalir alami
+2. PANJANG 120-150 kata (WAJIB!)
+3. JANGAN gunakan emoji, bullet points, atau markdown
+4. JANGAN ulangi data mentah, tapi jelaskan dalam kalimat natural
+5. Sertakan 1-2 rekomendasi spesifik
+
+HASIL ANALISIS UNTUK {location.upper()}:"""
 
     try:
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        insights = response.text.strip()
-        print(f"✅ Gemini response received for {location} (panjang: {len(insights.split())} kata)")
-
-        word_count = len(insights.split())
-        if word_count < 30 or word_count > 200:
-            print(f"⚠️ Response tidak ideal ({word_count} kata), menggunakan fallback")
+        insights = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=3)
+        
+        if insights:
+            word_count = len(insights.split())
+            print(f"INFO:    Gemini response received (panjang: {word_count} kata)")
+            
+            if word_count < 80 or word_count > 160:
+                print(f"INFO:    Response tidak ideal ({word_count} kata), menggunakan fallback")
+                return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
+            
+            return insights
+        else:
+            print("INFO:    Gemini returned None, menggunakan fallback")
             return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
-
-        return insights
+            
     except Exception as e:
-        print(f"❌ Gemini API error: {e}")
+        print(f"INFO:    Gemini API error: {e}")
         return get_ai_insights_fallback(weather, forecast, air_quality, location_name)
+
+@app.get("/api-key-status")
+async def api_key_status():
+    if gemini_rotator:
+        return {
+            "available": AI_AVAILABLE,
+            "keys": gemini_rotator.get_status()
+        }
+    return {"available": False, "keys": []}
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -1076,7 +1252,7 @@ selected_location = {
     "timezone": "Asia/Jakarta",
 }
 
-# ============ FUNGSI RENDER PAGE ============
+# ============ RENDER PAGE FUNCTION ============
 def render_page(content: str, active: str = "home", message: str = None, message_type: str = None, saved_locations: list = None, selected_location: dict = None):
     message_html = ""
     if message:
@@ -1129,7 +1305,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </script>
         """
 
-    return f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -1143,7 +1319,184 @@ def render_page(content: str, active: str = "home", message: str = None, message
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/styles.css">
+    {location_data}
     <style>
+        /* Custom Alert/Notification Styles */
+        .custom-alert {{
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: var(--card-bg);
+            backdrop-filter: blur(24px);
+            border-radius: 28px;
+            padding: 28px 32px;
+            max-width: 400px;
+            width: 90%;
+            z-index: 20000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-xl), 0 0 0 1000px rgba(0, 0, 0, 0.6);
+            text-align: center;
+        }}
+
+        .custom-alert.show {{
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+        }}
+
+        .custom-alert.error {{
+            border-top: 4px solid var(--danger);
+        }}
+
+        .custom-alert.success {{
+            border-top: 4px solid var(--success);
+        }}
+
+        .custom-alert.warning {{
+            border-top: 4px solid var(--warning);
+        }}
+
+        .custom-alert.info {{
+            border-top: 4px solid var(--accent);
+        }}
+
+        .custom-alert-icon {{
+            font-size: 56px;
+            margin-bottom: 16px;
+        }}
+
+        .custom-alert.error .custom-alert-icon {{
+            color: var(--danger);
+        }}
+
+        .custom-alert.success .custom-alert-icon {{
+            color: var(--success);
+        }}
+
+        .custom-alert.warning .custom-alert-icon {{
+            color: var(--warning);
+        }}
+
+        .custom-alert.info .custom-alert-icon {{
+            color: var(--accent);
+        }}
+
+        .custom-alert-title {{
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }}
+
+        .custom-alert-message {{
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }}
+
+        .custom-alert-buttons {{
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }}
+
+        .custom-alert-btn {{
+            padding: 10px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }}
+
+        .custom-alert-btn:hover {{
+            transform: translateY(-2px);
+        }}
+
+        .custom-alert-btn.primary {{
+            background: var(--accent-gradient);
+            color: white;
+        }}
+
+        .custom-alert-btn.primary:hover {{
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }}
+
+        .custom-alert-btn.danger {{
+            background: linear-gradient(135deg, var(--danger), #dc2626);
+            color: white;
+        }}
+
+        .custom-alert-btn.danger:hover {{
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }}
+
+        .custom-alert-input {{
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 14px;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+        }}
+
+        .custom-alert-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }}
+
+        .custom-alert-input.error {{
+            border-color: var(--danger);
+            animation: shake 0.3s ease;
+        }}
+
+        .custom-alert-close {{
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s ease;
+        }}
+
+        .custom-alert-close:hover {{
+            color: var(--danger);
+            transform: rotate(90deg);
+        }}
+
+        @keyframes shake {{
+            0%, 100% {{ transform: translateX(0); }}
+            25% {{ transform: translateX(-5px); }}
+            75% {{ transform: translateX(5px); }}
+        }}
+
+        @keyframes alertPopIn {{
+            from {{
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }}
+            to {{
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }}
+        }}
+
         /* ============ CHATBOT CSS INLINE ============ */
         
         /* Chat Toggle Button */
@@ -1438,48 +1791,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 max-width: 90%;
             }}
         }}
-
-        /* Custom Alert Styles */
-        .custom-alert {{
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.9);
-            background: white;
-            border-radius: 28px;
-            padding: 28px 32px;
-            max-width: 400px;
-            width: 90%;
-            z-index: 20000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            text-align: center;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-        }}
-        body.dark .custom-alert {{
-            background: #1e293b;
-        }}
-        .custom-alert.show {{
-            opacity: 1;
-            visibility: visible;
-            transform: translate(-50%, -50%) scale(1);
-        }}
-        .custom-alert.error {{ border-top: 4px solid #ef4444; }}
-        .custom-alert.success {{ border-top: 4px solid #10b981; }}
-        .custom-alert.warning {{ border-top: 4px solid #f59e0b; }}
-        .custom-alert.info {{ border-top: 4px solid #3b82f6; }}
-        .custom-alert-icon {{ font-size: 56px; margin-bottom: 16px; }}
-        .custom-alert-title {{ font-size: 20px; font-weight: 800; margin-bottom: 12px; }}
-        .custom-alert-message {{ font-size: 14px; line-height: 1.6; margin-bottom: 24px; }}
-        .custom-alert-buttons {{ display: flex; gap: 12px; justify-content: center; }}
-        .custom-alert-btn {{ padding: 10px 24px; border-radius: 40px; font-weight: 600; cursor: pointer; border: none; background: #e2e8f0; }}
-        .custom-alert-btn.primary {{ background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; }}
-        .custom-alert-close {{ position: absolute; top: 16px; right: 20px; background: none; border: none; cursor: pointer; font-size: 18px; }}
-        .custom-alert-input {{ width: 100%; padding: 12px 16px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 20px; }}
-        body.dark .custom-alert-input {{ background: #334155; border-color: #475569; color: white; }}
     </style>
-    {location_data}
 </head>
 <body>
     <div class="loader-wrapper" id="loaderWrapper">
@@ -1656,10 +1968,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </div>
     </div>
 
-    <div class="aura-bg">
-        <div class="aura-glow"></div>
-    </div>
-
     <!-- Chat AI Ashley Button & Bubble -->
     <button class="chat-toggle" id="chatToggle" onclick="toggleChat()" aria-label="Chat AI Ashley">
         <i class="fas fa-comment-dots"></i>
@@ -1696,6 +2004,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 <i class="fas fa-paper-plane"></i>
             </button>
         </div>
+    </div>
+
+    <div class="aura-bg">
+        <div class="aura-glow"></div>
     </div>
 
     <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">
@@ -1760,7 +2072,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
         </main>
     </div>
 
-<script>
+    <script>
+    // === JAVASCRIPT CODE ===
     window.addEventListener('load', function() {{
         setTimeout(function() {{
             var loader = document.getElementById('loaderWrapper');
@@ -1836,11 +2149,11 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}).then(function(response) {{
                 setTimeout(function() {{
                     hideTrainingModal();
-                    window.location.href = '/main?message=✅ Model ML berhasil dilatih!&type=success';
+                    window.location.href = '/main?message=Model berhasil dilatih!&type=success';
                 }}, 500);
             }}).catch(function(error) {{
                 hideTrainingModal();
-                window.location.href = '/main?message=❌ Gagal melatih model&type=error';
+                window.location.href = '/main?message=Gagal melatih model&type=error';
             }});
         }});
     }});
@@ -2120,24 +2433,25 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     // Custom Alert Functions
-    let currentAlertCallback = null;
-    let currentPromptCallback = null;
+    var currentAlertCallback = null;
+    var currentPromptCallback = null;
 
-    function showCustomAlert(title, message, type = 'info', callback = null) {{
-        const alert = document.getElementById('customAlert');
-        const icon = alert.querySelector('.custom-alert-icon i');
-        const titleEl = document.getElementById('alertTitle');
-        const messageEl = document.getElementById('alertMessage');
+    function showCustomAlert(title, message, type, callback) {{
+        if (type === undefined) type = 'info';
+        var alert = document.getElementById('customAlert');
+        var icon = alert.querySelector('.custom-alert-icon i');
+        var titleEl = document.getElementById('alertTitle');
+        var messageEl = document.getElementById('alertMessage');
         
         alert.classList.remove('error', 'success', 'warning', 'info');
         alert.classList.add(type);
         
-        let iconClass = 'fa-info-circle';
+        var iconClass = 'fa-info-circle';
         if (type === 'error') iconClass = 'fa-exclamation-circle';
         else if (type === 'success') iconClass = 'fa-check-circle';
         else if (type === 'warning') iconClass = 'fa-exclamation-triangle';
         
-        icon.className = `fas ${{iconClass}}`;
+        icon.className = 'fas ' + iconClass;
         
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -2147,14 +2461,14 @@ def render_page(content: str, active: str = "home", message: str = None, message
         alert.classList.add('show');
         
         if (type === 'success' || type === 'info') {{
-            setTimeout(() => {{
+            setTimeout(function() {{
                 closeCustomAlert();
             }}, 3000);
         }}
     }}
 
     function closeCustomAlert() {{
-        const alert = document.getElementById('customAlert');
+        var alert = document.getElementById('customAlert');
         alert.classList.remove('show');
         if (currentAlertCallback) {{
             currentAlertCallback();
@@ -2163,10 +2477,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function showCustomPrompt(title, message, callback) {{
-        const prompt = document.getElementById('customPrompt');
-        const titleEl = document.getElementById('promptTitle');
-        const messageEl = document.getElementById('promptMessage');
-        const input = document.getElementById('promptInput');
+        var prompt = document.getElementById('customPrompt');
+        var titleEl = document.getElementById('promptTitle');
+        var messageEl = document.getElementById('promptMessage');
+        var input = document.getElementById('promptInput');
         
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -2177,20 +2491,20 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         prompt.classList.add('show');
         
-        setTimeout(() => {{
+        setTimeout(function() {{
             input.focus();
         }}, 100);
     }}
 
     function closeCustomPrompt() {{
-        const prompt = document.getElementById('customPrompt');
+        var prompt = document.getElementById('customPrompt');
         prompt.classList.remove('show');
         currentPromptCallback = null;
     }}
 
     function submitPrompt() {{
-        const input = document.getElementById('promptInput');
-        const password = input.value;
+        var input = document.getElementById('promptInput');
+        var password = input.value;
         
         if (currentPromptCallback) {{
             currentPromptCallback(password);
@@ -2199,7 +2513,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function promptAndDeleteTestimonial(id) {{
-        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', (password) => {{
+        showCustomPrompt('Verifikasi Akses', 'Masukkan kata kunci untuk menghapus komentar', function(password) {{
             if (password && password !== '') {{
                 fetch('/verify-delete-testimonial/' + id, {{
                     method: 'POST',
@@ -2208,17 +2522,17 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     }},
                     body: JSON.stringify({{ password: password }})
                 }})
-                .then(response => response.json())
-                .then(data => {{
+                .then(function(response) {{ return response.json(); }})
+                .then(function(data) {{
                     if (data.success) {{
-                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', () => {{
+                        showCustomAlert('Berhasil!', 'Ulasan berhasil dihapus!', 'success', function() {{
                             window.location.href = '/about?message=Ulasan berhasil dihapus&type=success';
                         }});
                     }} else {{
                         showCustomAlert('Gagal!', data.message || 'Password salah! Ulasan tidak dapat dihapus.', 'error');
                     }}
                 }})
-                .catch(error => {{
+                .catch(function(error) {{
                     console.error('Error:', error);
                     showCustomAlert('Error!', 'Terjadi kesalahan pada server.', 'error');
                 }});
@@ -2376,33 +2690,35 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function trainImageClassifier() {{
-        showCustomPrompt('Training Model CNN', 'Masukkan path folder dataset (contoh: ./weather_dataset):', (datasetPath) => {{
-            if (!datasetPath) return;
+        var loadingDiv = document.getElementById('prediction-loading');
+        if (loadingDiv) {{
+            loadingDiv.style.display = 'block';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-pulse" style="font-size: 32px;"></i>';
+        }}
+        
+        fetch('/download-cnn-model', {{
+            method: 'POST'
+        }})
+        .then(async function(response) {{
+            var data = await response.json();
             
-            var loadingDiv = document.getElementById('prediction-loading');
-            if (loadingDiv) loadingDiv.style.display = 'block';
+            if (loadingDiv) loadingDiv.style.display = 'none';
             
-            fetch('/train-image-classifier?dataset_path=' + encodeURIComponent(datasetPath), {{
-                method: 'POST'
-            }})
-            .then(function(response) {{ return response.json(); }})
-            .then(function(data) {{
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                if (data.success) {{
-                    showCustomAlert(
-                        'Berhasil!', 
-                        '✅ Model berhasil dilatih!\\nAccuracy: ' + (data.accuracy * 100).toFixed(2) + '%\\nVal Accuracy: ' + (data.val_accuracy * 100).toFixed(2) + '%',
-                        'success',
-                        function() {{ location.reload(); }}
-                    );
-                }} else {{
-                    showCustomAlert('Gagal', '❌ Gagal melatih model: ' + data.error, 'error');
-                }}
-            }})
-            .catch(function(error) {{
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
-            }});
+            if (data.success) {{
+                showCustomAlert(
+                    'Berhasil!', 
+                    'Model berhasil diunduh!',
+                    'success',
+                    function() {{ location.reload(); }}
+                );
+            }} else {{
+                showCustomAlert('Gagal', '❌ Gagal: ' + (data.error || 'Unknown error'), 'error');
+            }}
+        }})
+        .catch(function(error) {{
+            console.error('Download error:', error);
+            if (loadingDiv) loadingDiv.style.display = 'none';
+            showCustomAlert('Error', '❌ Error: ' + error.message, 'error');
         }});
     }}
 
@@ -2540,9 +2856,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }} else {{
         initImageClassifier();
     }}
-</script>
+    </script>
 </body>
 </html>"""
+    return html_content
 
 # ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
@@ -2699,7 +3016,6 @@ async def home(request: Request):
 
     return HTMLResponse(content=render_page(content, active="home", saved_locations=saved_locations, selected_location=selected_location))
 
-
 # ============ ROUTE MAIN (ML) ============
 @app.get("/main", response_class=HTMLResponse)
 async def ml_dashboard(request: Request):
@@ -2768,13 +3084,21 @@ async def ml_dashboard(request: Request):
                 <i class="fas fa-brain" style="font-size: 64px; color: var(--ml-purple); margin-bottom: 24px; display: block;"></i>
                 <p style="color: var(--text-tertiary); margin-bottom: 24px;">Klik tombol di bawah untuk melatih model Random Forest Regressor</p>
                 <form method="GET" action="/train-model" id="trainForm">
-                    <button type="submit" class="train-btn-ml">
+                    <button type="submit" class="train-btn-ml" style="background: linear-gradient(135deg, #8b5cf6, #a855f7, #c084fc); border: none; border-radius: 50px; padding: 14px 28px; color: white; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.3s ease; margin-top: 16px; width: auto; min-width: 220px;">
                         <i class="fas fa-play"></i> Latih Model ML Sekarang
                     </button>
                 </form>
             </div>
         </div>
         """
+
+    cnn_model_exists = os.path.exists(MODEL_CKPT_PATH)
+    if cnn_model_exists:
+        cnn_btn_text = "Model Sudah Dilatih"
+        cnn_btn_disabled = "disabled"
+    else:
+        cnn_btn_text = "Download & Load Model CNN"
+        cnn_btn_disabled = ""
 
     image_classifier_html = f"""
     <div class="glass-card" style="height: 100%;">
@@ -2822,11 +3146,9 @@ async def ml_dashboard(request: Request):
                 <p style="margin-top: 12px;">Menganalisis gambar...</p>
             </div>
 
-            <button onclick="trainImageClassifier()" class="train-btn-green" style="margin-top: 20px; width: 100%;">
-                <i class="fas fa-database"></i> Latih Model CNN (Upload Dataset)
-            </button>
+            <button onclick="trainImageClassifier()" class="train-btn-green" {cnn_btn_disabled}>{cnn_btn_text}</button>
             <p style="font-size: 11px; color: var(--text-tertiary); text-align: center; margin-top: 12px;">
-                *pastikan gambar memiliki resolusi yang cukup dan jelas untuk hasil terbaik. Dataset harus memiliki struktur folder dengan subfolder untuk setiap kelas cuaca (misal: ./weather_dataset/cerah, ./weather_dataset/hujan, dll) dan masing-masing subfolder berisi gambar-gambar terkait.
+                *pastikan gambar memiliki kualitas yang baik dan jelas
             </p>
         </div>
     </div>
@@ -2882,7 +3204,6 @@ async def ml_dashboard(request: Request):
     """
 
     return HTMLResponse(content=render_page(content, active="ml", saved_locations=saved_locations, selected_location=selected_location))
-
 
 # ============ ROUTE TULIS ULASAN ============
 @app.get("/ulasan", response_class=HTMLResponse)
@@ -3019,17 +3340,17 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
     </div>
 
     <script>
-        const stars = document.querySelectorAll('.rating-star');
-        const ratingInput = document.getElementById('ratingValue');
-        let selectedRating = 0;
+        var stars = document.querySelectorAll('.rating-star');
+        var ratingInput = document.getElementById('ratingValue');
+        var selectedRating = 0;
         
-        stars.forEach(star => {{
+        stars.forEach(function(star) {{
             star.addEventListener('click', function() {{
                 selectedRating = parseInt(this.dataset.value);
                 ratingInput.value = selectedRating;
                 
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= selectedRating) {{
                         s.classList.add('selected');
                     }} else {{
@@ -3039,9 +3360,9 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
             
             star.addEventListener('mouseenter', function() {{
-                const hoverVal = parseInt(this.dataset.value);
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                var hoverVal = parseInt(this.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= hoverVal) {{
                         s.style.color = '#fbbf24';
                     }} else {{
@@ -3051,8 +3372,8 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
             
             star.addEventListener('mouseleave', function() {{
-                stars.forEach(s => {{
-                    const val = parseInt(s.dataset.value);
+                stars.forEach(function(s) {{
+                    var val = parseInt(s.dataset.value);
                     if (val <= selectedRating) {{
                         s.style.color = '#fbbf24';
                     }} else {{
@@ -3062,13 +3383,13 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             }});
         }});
         
-        const textarea = document.querySelector('textarea[name="comment"]');
-        const charCount = document.getElementById('charCount');
+        var textarea = document.querySelector('textarea[name="comment"]');
+        var charCount = document.getElementById('charCount');
         
         textarea.addEventListener('input', function() {{
-            const length = this.value.length;
+            var length = this.value.length;
             charCount.textContent = length;
-            const counter = document.querySelector('.char-counter');
+            var counter = document.querySelector('.char-counter');
             if (length > 200) {{
                 counter.classList.add('warning');
             }} else {{
@@ -3093,7 +3414,6 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
     
     return HTMLResponse(content=render_page(content, active="ulasan", saved_locations=saved_locations, selected_location=selected_location, message=message, message_type=type))
 
-
 @app.post("/ulasan/submit")
 async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: str = Form(...), rating: int = Form(...)):
     if len(comment) > 250:
@@ -3102,8 +3422,7 @@ async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: s
     save_testimonial(name, role, comment, rating)
     return RedirectResponse(url="/ulasan?message=Terima kasih! Ulasan Anda telah disimpan&type=success", status_code=303)
 
-
-# ============ ROUTE DELETE TESTIMONIAL ============
+# ============ ROUTE VERIFY DELETE TESTIMONIAL ============
 @app.post("/verify-delete-testimonial/{testimonial_id}")
 async def verify_delete_testimonial(testimonial_id: int, request: PasswordRequest):
     if not ADMIN_PASSWORD:
@@ -3114,7 +3433,6 @@ async def verify_delete_testimonial(testimonial_id: int, request: PasswordReques
         return {"success": True, "message": "Ulasan berhasil dihapus"}
     else:
         return {"success": False, "message": "Password salah!"}
-
 
 # ============ ROUTE SEARCH ============
 @app.get("/search", response_class=HTMLResponse)
@@ -3144,7 +3462,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 </div>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
-                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah. Mendukung semua kota di dunia.
+                <i class="fas fa-info-circle"></i> Gunakan nama kota atau daerah yang ingin Anda cari.
             </p>
         </div>
 
@@ -3173,8 +3491,8 @@ async def search_page(request: Request, message: str = None, type: str = None):
                                style="width: 100%; border-radius: 50px; padding: 12px 16px;">
                     </div>
                 </div>
-                <button type="submit" class="search-btn" style="width: 100%;">
-                    <i class="fas fa-location-dot"></i> Cari & Simpan dari Koordinat
+                <button type="submit" class="search-btn" style="display: flex; justify-content: center; align-items: center; width: 100%;">
+                    <i class="fas fa-search"></i> Cari dari Koordinat
                 </button>
             </form>
             <p style="margin-top: 16px; font-size: 12px; color: var(--text-tertiary);">
@@ -3191,24 +3509,24 @@ async def search_page(request: Request, message: str = None, type: str = None):
             </span>
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;">
-            <button onclick="setCoordinates(-6.2, 106.816666)" class="train-btn-ml" 
-                    style="padding: 8px 16px; font-size: 12px;">
+            <button onclick="setCoordinates(-6.2, 106.816666)" class="train-btn" 
+                    style="background: var(--accent-gradient); padding: 8px 16px; font-size: 12px;">
                 🇮🇩 Jakarta (-6.2, 106.82)
             </button>
-            <button onclick="setCoordinates(40.7128, -74.0060)" class="train-btn-ml" 
-                    style="padding: 8px 16px; font-size: 12px;">
+            <button onclick="setCoordinates(40.7128, -74.0060)" class="train-btn" 
+                    style="background: var(--accent-gradient); padding: 8px 16px; font-size: 12px;">
                 🇺🇸 New York (40.71, -74.01)
             </button>
-            <button onclick="setCoordinates(51.5074, -0.1278)" class="train-btn-ml" 
-                    style="padding: 8px 16px; font-size: 12px;">
+            <button onclick="setCoordinates(51.5074, -0.1278)" class="train-btn" 
+                    style="background: var(--accent-gradient); padding: 8px 16px; font-size: 12px;">
                 🇬🇧 London (51.51, -0.13)
             </button>
-            <button onclick="setCoordinates(35.6895, 139.6917)" class="train-btn-ml" 
-                    style="padding: 8px 16px; font-size: 12px;">
+            <button onclick="setCoordinates(35.6895, 139.6917)" class="train-btn" 
+                    style="background: var(--accent-gradient); padding: 8px 16px; font-size: 12px;">
                 🇯🇵 Tokyo (35.69, 139.69)
             </button>
-            <button onclick="setCoordinates(-33.8688, 151.2093)" class="train-btn-ml" 
-                    style="padding: 8px 16px; font-size: 12px;">
+            <button onclick="setCoordinates(-33.8688, 151.2093)" class="train-btn" 
+                    style="background: var(--accent-gradient); padding: 8px 16px; font-size: 12px;">
                 🇦🇺 Sydney (-33.87, 151.21)
             </button>
         </div>
@@ -3216,8 +3534,8 @@ async def search_page(request: Request, message: str = None, type: str = None):
 
     <script>
         function setCoordinates(lat, lon) {{
-            const latInput = document.querySelector('input[name="latitude"]');
-            const lonInput = document.querySelector('input[name="longitude"]');
+            var latInput = document.querySelector('input[name="latitude"]');
+            var lonInput = document.querySelector('input[name="longitude"]');
 
             if (latInput && lonInput) {{
                 latInput.value = lat;
@@ -3228,7 +3546,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
                 latInput.style.borderColor = '#10b981';
                 lonInput.style.borderColor = '#10b981';
 
-                setTimeout(() => {{
+                setTimeout(function() {{
                     latInput.style.borderColor = '';
                     lonInput.style.borderColor = '';
                 }}, 2000);
@@ -3238,7 +3556,6 @@ async def search_page(request: Request, message: str = None, type: str = None):
     """
 
     return HTMLResponse(content=render_page(content=content, active="search", message=message, message_type=type, saved_locations=saved_locations, selected_location=selected_location))
-
 
 @app.post("/search/city", response_class=HTMLResponse)
 async def search_city_post(city_name: str = Form(...)):
@@ -3251,7 +3568,6 @@ async def search_city_post(city_name: str = Form(...)):
         return RedirectResponse(url=f"/search?message={result['name']} berhasil ditambahkan ke favorit&type=success", status_code=303)
     else:
         return RedirectResponse(url=f"/search?message=Kota '{city_name}' tidak ditemukan. Periksa ejaan Anda.&type=error", status_code=303)
-
 
 @app.post("/search/coords", response_class=HTMLResponse)
 async def search_coords_post(latitude: float = Form(...), longitude: float = Form(...)):
@@ -3266,10 +3582,9 @@ async def search_coords_post(latitude: float = Form(...), longitude: float = For
         save_location(result["name"], result["latitude"], result["longitude"], result["country"], result["timezone"])
 
         coords_text = f"{latitude:.4f}, {longitude:.4f}"
-        return RedirectResponse(url=f"/search?message=📍 {result['name']} ({coords_text}) berhasil ditambahkan ke favorit&type=success", status_code=303)
+        return RedirectResponse(url=f"/search?message={result['name']} ({coords_text}) berhasil ditambahkan ke favorit&type=success", status_code=303)
     else:
-        return RedirectResponse(url=f"/search?message=❌ Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
-
+        return RedirectResponse(url=f"/search?message=Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
 
 # ============ ROUTE ABOUT ============
 @app.get("/about", response_class=HTMLResponse)
@@ -3539,19 +3854,18 @@ async def about_page(request: Request, message: str = None, type: str = None):
     </div>
 
     <script>
-        const scrollContainer = document.getElementById('testimonialsScroll');
+        var scrollContainer = document.getElementById('testimonialsScroll');
         if (scrollContainer) {{
-            let isDown = false, startX, scrollLeft;
-            scrollContainer.addEventListener('mousedown', (e) => {{ isDown = true; scrollContainer.style.cursor = 'grabbing'; startX = e.pageX - scrollContainer.offsetLeft; scrollLeft = scrollContainer.scrollLeft; }});
-            scrollContainer.addEventListener('mouseleave', () => {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
-            scrollContainer.addEventListener('mouseup', () => {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
-            scrollContainer.addEventListener('mousemove', (e) => {{ if (!isDown) return; e.preventDefault(); const x = e.pageX - scrollContainer.offsetLeft; scrollContainer.scrollLeft = scrollLeft - (x - startX) * 2; }});
+            var isDown = false, startX, scrollLeft;
+            scrollContainer.addEventListener('mousedown', function(e) {{ isDown = true; scrollContainer.style.cursor = 'grabbing'; startX = e.pageX - scrollContainer.offsetLeft; scrollLeft = scrollContainer.scrollLeft; }});
+            scrollContainer.addEventListener('mouseleave', function() {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
+            scrollContainer.addEventListener('mouseup', function() {{ isDown = false; scrollContainer.style.cursor = 'grab'; }});
+            scrollContainer.addEventListener('mousemove', function(e) {{ if (!isDown) return; e.preventDefault(); var x = e.pageX - scrollContainer.offsetLeft; scrollContainer.scrollLeft = scrollLeft - (x - startX) * 2; }});
         }}
     </script>
     """
 
     return HTMLResponse(content=render_page(content, active="about", saved_locations=saved_locations, message=message, message_type=type))
-
 
 # ============ ROUTE LOCATION ============
 @app.get("/select-location/{location_id}")
@@ -3578,12 +3892,10 @@ async def select_location(location_id: int):
         }
     return RedirectResponse(url="/", status_code=303)
 
-
 @app.get("/delete-location/{location_id}")
 async def delete_location_route(location_id: int):
     delete_location(location_id)
     return RedirectResponse(url="/?message=Lokasi berhasil dihapus&type=success", status_code=303)
-
 
 # ============ ROUTE TRAIN MODEL ============
 @app.get("/train-model")
@@ -3596,12 +3908,36 @@ async def train_model_route(request: Request):
         result = weather_predictor.train_model(selected_location["name"], selected_location["latitude"], selected_location["longitude"])
         if is_ajax:
             return {"success": True, "mae": result["mae"], "r2": result["r2"]}
-        return RedirectResponse(url=f"/main?message=✅ Model ML berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
+        return RedirectResponse(url=f"/main?message=Model berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
     except Exception as e:
         if is_ajax:
             return {"success": False, "error": str(e)}
-        return RedirectResponse(url=f"/main?message=❌ Gagal melatih model: {str(e)}&type=error", status_code=303)
+        return RedirectResponse(url=f"/main?message=Gagal melatih model: {str(e)}&type=error", status_code=303)
 
+# ============ ROUTE DOWNLOAD CNN MODEL ============
+@app.post("/download-cnn-model")
+async def download_cnn_model():
+    try:
+        if not TF_AVAILABLE:
+            return {"success": False, "error": "TensorFlow tidak tersedia"}
+        
+        success = download_model_from_gdrive()
+        
+        if not success:
+            return {"success": False, "error": "Gagal download model dari Google Drive"}
+        
+        weather_image_classifier.load_model()
+        
+        if weather_image_classifier.model is None:
+            return {"success": False, "error": "Gagal memuat model CNN"}
+        
+        return {"success": True, "message": "Model berhasil di-download dan dimuat"}
+        
+    except Exception as e:
+        print(f"Error in download_cnn_model: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 # ============ ROUTE PREDICT IMAGE ============
 @app.post("/predict-weather-image")
@@ -3631,7 +3967,6 @@ async def predict_weather_from_image(file: UploadFile = File(...)):
         print(f"Error predict image: {e}")
         return {"success": False, "error": str(e)}
 
-
 @app.post("/train-image-classifier")
 async def train_image_classifier_route(dataset_path: str):
     try:
@@ -3648,11 +3983,7 @@ async def train_image_classifier_route(dataset_path: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-
 # ============ AI CHAT ASHLEY ENDPOINT ============
-class ChatMessage(BaseModel):
-    message: str
-
 @app.post("/chat-ai")
 async def chat_ai(chat: ChatMessage):
     """Endpoint untuk chat AI Ashley dengan batasan topik cuaca"""
@@ -3726,7 +4057,7 @@ async def chat_ai(chat: ChatMessage):
         condition = get_condition_text(weather.get("weather_code", 0))
         
         # Buat prompt untuk Gemini dengan konteks cuaca
-        prompt = f"""Kamu adalah Ashley, asisten cuaca yang ramah dan profesional. Jawab pertanyaan pengguna tentang cuaca dengan singkat, padat, dan informatif (maksimal 3 kalimat jika memungkinkan). Gunakan bahasa Indonesia yang natural.
+        prompt = f"""Kamu adalah Ashley, asisten cuaca yang santai dan profesional. Jawab pertanyaan pengguna tentang cuaca dengan singkat, padat, dan informatif. Gunakan bahasa Indonesia yang natural.
 
 DATA CUACA REAL-TIME ({location_name}):
 - Suhu: {int(weather.get('temperature', 0))}°C
@@ -3740,19 +4071,23 @@ PERTANYAAN PENGGUNA: "{user_message}"
 PANDUAN:
 1. Jawab hanya terkait cuaca
 2. Gunakan data cuaca di atas jika relevan
-3. Jika ditanya prakiraan, beri gambaran singkat
+3. Jika ditanya prakiraan, beri gambaran
 4. Jika ditanya di luar cuaca, tolak dengan sopan
-5. Jawaban singkat, maksimal 50 kata
-6. Sertakan emoji yang relevan (maksimal 2)
+5. Jawaban singkat, maksimal 70 kata
+6. Sertakan emoji yang relevan
 
 JAWABAN:"""
 
-        if AI_AVAILABLE and client:
-            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            reply = response.text.strip()
+        if AI_AVAILABLE and gemini_rotator:
+            response = gemini_rotator.call_api(prompt, model="gemini-2.5-flash", max_retries=2)
             
-            if len(reply) > 300:
-                reply = reply[:300] + "..."
+            if response:
+                reply = response
+                if len(reply) > 300:
+                    reply = reply[:300] + "..."
+            else:
+                # Fallback response
+                reply = f"☁️ Cuaca di {location_name} saat ini {condition} dengan suhu {int(weather.get('temperature', 0))}°C. Kelembaban {int(weather.get('humidity', 0))}%. Ada yang ingin ditanyakan lagi?"
         else:
             # Fallback response
             reply = f"☁️ Cuaca di {location_name} saat ini {condition} dengan suhu {int(weather.get('temperature', 0))}°C. Kelembaban {int(weather.get('humidity', 0))}%. Ada yang ingin ditanyakan lagi?"
@@ -3763,6 +4098,5 @@ JAWABAN:"""
     
     return {"reply": reply}
 
-
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="localhost", port=8001)
