@@ -4113,7 +4113,7 @@ JAWABAN:"""
                 print(f"INFO:    Chat response received (panjang: {word_count} kata)")
                 
                 # Validasi panjang response seperti di AI Insights
-                if word_count < 50 or word_count > 180:
+                if word_count < 50 or word_count > 500:
                     print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback")
                     # Fallback pintar
                     uv = weather.get('uv_index', 5)
