@@ -1143,17 +1143,309 @@ def render_page(content: str, active: str = "home", message: str = None, message
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="./static/styles.css">
-    {location_data}
     <style>
-        /* Custom Alert/Notification Styles */
+        /* ============ CHATBOT CSS INLINE ============ */
+        
+        /* Chat Toggle Button */
+        .chat-toggle {{
+            position: fixed;
+            bottom: 28px;
+            right: 100px;
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #a855f7);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 200;
+            transition: all 0.3s ease;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            border: none;
+        }}
+        .chat-toggle:hover {{
+            transform: scale(1.1);
+        }}
+
+        /* Chat Bubble */
+        .chat-bubble {{
+            position: fixed;
+            bottom: 100px;
+            right: 28px;
+            width: 380px;
+            max-width: calc(100vw - 56px);
+            height: 500px;
+            max-height: calc(100vh - 140px);
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            z-index: 199;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0);
+            opacity: 0;
+            transform-origin: bottom right;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            visibility: hidden;
+        }}
+        body.dark .chat-bubble {{
+            background: #1e293b;
+        }}
+        .chat-bubble.open {{
+            transform: scale(1);
+            opacity: 1;
+            visibility: visible;
+        }}
+
+        /* Chat Header */
+        .chat-header {{
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #a855f7);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+            flex-shrink: 0;
+        }}
+        .chat-header-icon {{
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }}
+        .chat-header-info {{
+            flex: 1;
+        }}
+        .chat-header-info h4 {{
+            font-size: 16px;
+            font-weight: 700;
+            margin: 0;
+        }}
+        .chat-header-info p {{
+            font-size: 11px;
+            opacity: 0.8;
+            margin: 2px 0 0;
+        }}
+        .chat-close {{
+            width: 30px;
+            height: 30px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+        .chat-close:hover {{
+            background: rgba(255,255,255,0.3);
+            transform: rotate(90deg);
+        }}
+
+        /* Chat Messages */
+        .chat-messages {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+        .chat-message {{
+            display: flex;
+            gap: 10px;
+            max-width: 85%;
+        }}
+        .chat-message.bot {{
+            align-self: flex-start;
+        }}
+        .chat-message.user {{
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }}
+        .chat-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }}
+        .chat-message.bot .chat-avatar {{
+            background: linear-gradient(135deg, #8b5cf6, #a855f7);
+            color: white;
+        }}
+        .chat-message.user .chat-avatar {{
+            background: #3b82f6;
+            color: white;
+        }}
+        .chat-bubble-text {{
+            padding: 10px 14px;
+            border-radius: 18px;
+            font-size: 13px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }}
+        .chat-message.bot .chat-bubble-text {{
+            background: #f1f5f9;
+            color: #0f172a;
+            border-top-left-radius: 4px;
+        }}
+        body.dark .chat-message.bot .chat-bubble-text {{
+            background: #334155;
+            color: #f1f5f9;
+        }}
+        .chat-message.user .chat-bubble-text {{
+            background: #3b82f6;
+            color: white;
+            border-top-right-radius: 4px;
+        }}
+
+        /* Typing Indicator */
+        .chat-typing {{
+            display: flex;
+            gap: 4px;
+            padding: 10px 14px;
+            background: #f1f5f9;
+            border-radius: 18px;
+            border-top-left-radius: 4px;
+            width: fit-content;
+        }}
+        body.dark .chat-typing {{
+            background: #334155;
+        }}
+        .chat-typing span {{
+            width: 8px;
+            height: 8px;
+            background: #94a3b8;
+            border-radius: 50%;
+            animation: typingBounce 1.4s infinite ease-in-out;
+        }}
+        body.dark .chat-typing span {{
+            background: #cbd5e1;
+        }}
+        @keyframes typingBounce {{
+            0%,60%,100% {{ transform: translateY(0); opacity: 0.5; }}
+            30% {{ transform: translateY(-8px); opacity: 1; }}
+        }}
+        .chat-typing span:nth-child(1) {{ animation-delay: 0s; }}
+        .chat-typing span:nth-child(2) {{ animation-delay: 0.2s; }}
+        .chat-typing span:nth-child(3) {{ animation-delay: 0.4s; }}
+
+        /* Chat Input */
+        .chat-input-area {{
+            padding: 16px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }}
+        body.dark .chat-input-area {{
+            border-top-color: #334155;
+        }}
+        .chat-input-area input {{
+            flex: 1;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 28px;
+            color: #0f172a;
+            font-family: inherit;
+            font-size: 13px;
+        }}
+        body.dark .chat-input-area input {{
+            background: #1e293b;
+            border-color: #475569;
+            color: #f1f5f9;
+        }}
+        .chat-input-area input:focus {{
+            outline: none;
+            border-color: #3b82f6;
+        }}
+        .chat-input-area button {{
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #a855f7);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .chat-input-area button:hover {{
+            transform: scale(1.05);
+        }}
+        .chat-input-area button:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+        }}
+
+        /* Chat Scrollbar */
+        .chat-messages::-webkit-scrollbar {{
+            width: 4px;
+        }}
+        .chat-messages::-webkit-scrollbar-track {{
+            background: #e2e8f0;
+            border-radius: 10px;
+        }}
+        .chat-messages::-webkit-scrollbar-thumb {{
+            background: #3b82f6;
+            border-radius: 10px;
+        }}
+        body.dark .chat-messages::-webkit-scrollbar-track {{
+            background: #1e293b;
+        }}
+
+        @media (max-width: 768px) {{
+            .chat-toggle {{
+                bottom: 20px;
+                right: 80px;
+                width: 44px;
+                height: 44px;
+                font-size: 20px;
+            }}
+            .chat-bubble {{
+                width: calc(100vw - 40px);
+                right: 20px;
+                bottom: 80px;
+                max-height: calc(100vh - 100px);
+            }}
+        }}
+        
+        @media (max-width: 480px) {{
+            .chat-bubble {{
+                width: calc(100vw - 32px);
+                right: 16px;
+                bottom: 76px;
+                border-radius: 24px;
+            }}
+            .chat-header {{
+                padding: 12px 16px;
+            }}
+            .chat-message {{
+                max-width: 90%;
+            }}
+        }}
+
+        /* Custom Alert Styles */
         .custom-alert {{
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%) scale(0.9);
-            background: var(--card-bg);
-            backdrop-filter: blur(24px);
+            background: white;
             border-radius: 28px;
             padding: 28px 32px;
             max-width: 400px;
@@ -1161,167 +1453,33 @@ def render_page(content: str, active: str = "home", message: str = None, message
             z-index: 20000;
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--shadow-xl), 0 0 0 1000px rgba(0, 0, 0, 0.6);
+            transition: all 0.3s ease;
             text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
         }}
-
+        body.dark .custom-alert {{
+            background: #1e293b;
+        }}
         .custom-alert.show {{
             opacity: 1;
             visibility: visible;
             transform: translate(-50%, -50%) scale(1);
         }}
-
-        .custom-alert.error {{
-            border-top: 4px solid var(--danger);
-        }}
-
-        .custom-alert.success {{
-            border-top: 4px solid var(--success);
-        }}
-
-        .custom-alert.warning {{
-            border-top: 4px solid var(--warning);
-        }}
-
-        .custom-alert.info {{
-            border-top: 4px solid var(--accent);
-        }}
-
-        .custom-alert-icon {{
-            font-size: 56px;
-            margin-bottom: 16px;
-        }}
-
-        .custom-alert.error .custom-alert-icon {{
-            color: var(--danger);
-        }}
-
-        .custom-alert.success .custom-alert-icon {{
-            color: var(--success);
-        }}
-
-        .custom-alert.warning .custom-alert-icon {{
-            color: var(--warning);
-        }}
-
-        .custom-alert.info .custom-alert-icon {{
-            color: var(--accent);
-        }}
-
-        .custom-alert-title {{
-            font-size: 20px;
-            font-weight: 800;
-            margin-bottom: 12px;
-            color: var(--text-primary);
-        }}
-
-        .custom-alert-message {{
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }}
-
-        .custom-alert-buttons {{
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-        }}
-
-        .custom-alert-btn {{
-            padding: 10px 24px;
-            border-radius: 40px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: none;
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-        }}
-
-        .custom-alert-btn:hover {{
-            transform: translateY(-2px);
-        }}
-
-        .custom-alert-btn.primary {{
-            background: var(--accent-gradient);
-            color: white;
-        }}
-
-        .custom-alert-btn.primary:hover {{
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        }}
-
-        .custom-alert-btn.danger {{
-            background: linear-gradient(135deg, var(--danger), #dc2626);
-            color: white;
-        }}
-
-        .custom-alert-btn.danger:hover {{
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-        }}
-
-        .custom-alert-input {{
-            width: 100%;
-            padding: 12px 16px;
-            background: var(--bg-tertiary);
-            border: 2px solid var(--border-color);
-            border-radius: 16px;
-            color: var(--text-primary);
-            font-family: inherit;
-            font-size: 14px;
-            margin-bottom: 20px;
-            transition: all 0.2s ease;
-        }}
-
-        .custom-alert-input:focus {{
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-soft);
-        }}
-
-        .custom-alert-input.error {{
-            border-color: var(--danger);
-            animation: shake 0.3s ease;
-        }}
-
-        .custom-alert-close {{
-            position: absolute;
-            top: 16px;
-            right: 20px;
-            background: none;
-            border: none;
-            color: var(--text-tertiary);
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.2s ease;
-        }}
-
-        .custom-alert-close:hover {{
-            color: var(--danger);
-            transform: rotate(90deg);
-        }}
-
-        @keyframes shake {{
-            0%, 100% {{ transform: translateX(0); }}
-            25% {{ transform: translateX(-5px); }}
-            75% {{ transform: translateX(5px); }}
-        }}
-
-        @keyframes alertPopIn {{
-            from {{
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.8);
-            }}
-            to {{
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1);
-            }}
-        }}
+        .custom-alert.error {{ border-top: 4px solid #ef4444; }}
+        .custom-alert.success {{ border-top: 4px solid #10b981; }}
+        .custom-alert.warning {{ border-top: 4px solid #f59e0b; }}
+        .custom-alert.info {{ border-top: 4px solid #3b82f6; }}
+        .custom-alert-icon {{ font-size: 56px; margin-bottom: 16px; }}
+        .custom-alert-title {{ font-size: 20px; font-weight: 800; margin-bottom: 12px; }}
+        .custom-alert-message {{ font-size: 14px; line-height: 1.6; margin-bottom: 24px; }}
+        .custom-alert-buttons {{ display: flex; gap: 12px; justify-content: center; }}
+        .custom-alert-btn {{ padding: 10px 24px; border-radius: 40px; font-weight: 600; cursor: pointer; border: none; background: #e2e8f0; }}
+        .custom-alert-btn.primary {{ background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; }}
+        .custom-alert-close {{ position: absolute; top: 16px; right: 20px; background: none; border: none; cursor: pointer; font-size: 18px; }}
+        .custom-alert-input {{ width: 100%; padding: 12px 16px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 20px; }}
+        body.dark .custom-alert-input {{ background: #334155; border-color: #475569; color: white; }}
     </style>
+    {location_data}
 </head>
 <body>
     <div class="loader-wrapper" id="loaderWrapper">
@@ -3607,4 +3765,4 @@ JAWABAN:"""
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
