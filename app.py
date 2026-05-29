@@ -23,6 +23,7 @@ import json
 import time
 import random
 from threading import Lock
+import re  # Untuk clean_markdown
 
 warnings.filterwarnings("ignore")
 
@@ -61,6 +62,28 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_API_KEY_BACKUP = os.environ.get("GEMINI_API_KEY_BACKUP", "")
 GEMINI_API_KEY_BACKUP2 = os.environ.get("GEMINI_API_KEY_BACKUP2", "")
 GEMINI_API_KEY_BACKUP3 = os.environ.get("GEMINI_API_KEY_BACKUP3", "")
+
+def clean_markdown(text: str) -> str:
+    """Hilangkan format markdown (**tebal**, *miring*, `kode`, dll)"""
+    if not text:
+        return text
+    
+    # Hilangkan **tebal**
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    
+    # Hilangkan *miring*
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    
+    # Hilangkan __tebal alternatif__
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    
+    # Hilangkan `kode inline`
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    
+    # Hilangkan [link](url) -> jadi "link"
+    text = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', text)
+    
+    return text
 
 # ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
 class GeminiRotator:
@@ -4030,12 +4053,12 @@ async def chat_ai(chat: ChatMessage):
     
     if is_off_topic and not has_weather_keyword and not is_greeting:
         return {
-            "reply": "🌤️ *Maaf, saya hanya bisa membantu pertanyaan tentang cuaca!*\n\nSaya adalah asisten cuaca cerdas Ashley. Silakan tanyakan hal-hal seperti:\n• Cuaca hari ini / besok\n• Prakiraan cuaca\n• Suhu, kelembaban, angin\n• Kualitas udara\n• Tips menghadapi cuaca tertentu\n\nAda yang bisa saya bantu terkait cuaca?"
+            "reply": "🌤️ Maaf, saya hanya bisa membantu pertanyaan tentang cuaca!\n\nSaya adalah asisten cuaca cerdas Ashley. Silakan tanyakan hal-hal seperti:\n• Cuaca hari ini / besok\n• Prakiraan cuaca\n• Suhu, kelembaban, angin\n• Kualitas udara\n• Tips menghadapi cuaca tertentu\n\nAda yang bisa saya bantu terkait cuaca?"
         }
     
     if is_ashley_question:
         return {
-            "reply": "Halo! Saya *Ashley* 👋\n\nSaya adalah asisten cuaca cerdas berbasis AI yang siap membantu Anda dengan:\n✅ Informasi cuaca real-time\n✅ Prakiraan cuaca\n✅ Analisis kualitas udara\n✅ Tips & rekomendasi cuaca\n\nTanyakan apapun tentang cuaca, dan saya akan dengan senang hati membantu! ☁️🌤️"
+            "reply": "Halo! Saya Ashley 👋\n\nSaya adalah asisten cuaca cerdas berbasis AI yang siap membantu Anda dengan:\n✅ Informasi cuaca real-time\n✅ Prakiraan cuaca\n✅ Analisis kualitas udara\n✅ Tips & rekomendasi cuaca\n\nTanyakan apapun tentang cuaca, dan saya akan dengan senang hati membantu! ☁️🌤️"
         }
     
     # Jika hanya sapaan
@@ -4074,9 +4097,9 @@ PANDUAN:
 2. Gunakan data cuaca di atas jika relevan
 3. Jika ditanya prakiraan, beri gambaran dari data yang tersedia
 4. Jika ditanya di luar cuaca, tolak dengan sopan
-5. Jawab dengan LENGKAP dan INFORMATIF (minimal 50 kata, maksimal 150 kata)
+5. Jawab dengan LENGKAP dan INFORMATIF
 6. Sertakan emoji yang relevan
-7. PASTIKAN JAWABAN SELESAI dengan kalimat utuh, jangan berhenti di tengah!
+7. JANGAN gunakan markdown seperti **tebal** atau *miring*. Tulis polos saja.
 
 JAWABAN:"""
 
@@ -4091,65 +4114,85 @@ JAWABAN:"""
                 
                 # Validasi panjang response seperti di AI Insights
                 if word_count < 50 or word_count > 180:
-                    print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback yang lebih baik")
-                    # Fallback yang lebih baik
+                    print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback")
+                    # Fallback pintar
                     uv = weather.get('uv_index', 5)
                     aqi = air_quality.get('aqi', 0)
                     aqi_status = air_quality.get('status', 'Baik')
+                    temp = int(weather.get('temperature', 0))
+                    humidity = int(weather.get('humidity', 0))
                     
-                    reply = f"Hai! 👋 Dengan suhu {int(weather.get('temperature', 0))}°C dan kelembaban {int(weather.get('humidity', 0))}%, cuaca terasa { 'gerah' if weather.get('humidity', 0) > 70 else 'normal'}."
+                    fallback_reply = f"Hai! 👋 Dengan suhu {temp}°C dan kelembaban {humidity}%, cuaca terasa {'gerah' if humidity > 70 else 'normal'}."
                     
-                    if weather.get('uv_index', 0) > 6:
-                        reply += f" **UV Index {weather.get('uv_index', 0):.1f}** cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
+                    if uv > 6:
+                        fallback_reply += f" UV Index {uv:.1f} cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
                     
                     if aqi > 100:
-                        reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). 😷 Sebaiknya pakai masker jika beraktivitas di luar."
+                        fallback_reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). Sebaiknya pakai masker jika beraktivitas di luar."
                     
-                    reply += f" {get_ai_insights_fallback(weather, forecast, air_quality, location_name)[:200]}"
+                    if "anak" in message_lower and ("main" in message_lower or "luar" in message_lower):
+                        if aqi > 100 or uv > 7:
+                            fallback_reply += " Untuk anak-anak, sebaiknya batasi bermain di luar karena UV tinggi dan kualitas udara tidak sehat. Jika terpaksa, pastikan pakai sunscreen, topi, dan masker, serta jangan lebih dari 30 menit ya! 🧒"
+                        else:
+                            fallback_reply += " Untuk anak-anak, masih cukup aman bermain di luar. Tapi tetap awasi dan jangan lupa pakai sunscreen serta minum yang cukup ya! 🧒☀️"
+                    
+                    reply = clean_markdown(fallback_reply)
                 else:
-                    reply = response_text
+                    # Bersihkan markdown dari response Gemini
+                    reply = clean_markdown(response_text)
             else:
                 print("INFO:    Gemini returned None, menggunakan fallback")
-                # Fallback yang lebih baik
+                # Fallback pintar
                 uv = weather.get('uv_index', 5)
                 aqi = air_quality.get('aqi', 0)
                 aqi_status = air_quality.get('status', 'Baik')
+                temp = int(weather.get('temperature', 0))
+                humidity = int(weather.get('humidity', 0))
                 
-                reply = f"Hai! 👋 Dengan suhu {int(weather.get('temperature', 0))}°C dan kelembaban {int(weather.get('humidity', 0))}%, cuaca terasa { 'gerah' if weather.get('humidity', 0) > 70 else 'normal'}."
+                fallback_reply = f"Hai! 👋 Dengan suhu {temp}°C dan kelembaban {humidity}%, cuaca terasa {'gerah' if humidity > 70 else 'normal'}."
                 
-                if weather.get('uv_index', 0) > 6:
-                    reply += f" **UV Index {weather.get('uv_index', 0):.1f}** cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
+                if uv > 6:
+                    fallback_reply += f" UV Index {uv:.1f} cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
                 
                 if aqi > 100:
-                    reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). 😷 Sebaiknya pakai masker jika beraktivitas di luar."
+                    fallback_reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). Sebaiknya pakai masker jika beraktivitas di luar."
                 
-                # Tambahkan jawaban spesifik berdasarkan pertanyaan
-                if "gerimis" in message_lower or "lebat" in message_lower:
-                    reply += " Perbedaan hujan gerimis dan hujan lebat: gerimis memiliki tetesan kecil dan intensitas rendah (<0.5 mm/jam), sementara hujan lebat memiliki tetesan besar dan intensitas tinggi (>7.5 mm/jam) yang bisa menyebabkan genangan air."
-                else:
-                    reply += f" {get_ai_insights_fallback(weather, forecast, air_quality, location_name)[:150]}"
+                if "anak" in message_lower and ("main" in message_lower or "luar" in message_lower):
+                    if aqi > 100 or uv > 7:
+                        fallback_reply += " Untuk anak-anak, sebaiknya batasi bermain di luar karena UV tinggi dan kualitas udara tidak sehat. Jika terpaksa, pastikan pakai sunscreen, topi, dan masker, serta jangan lebih dari 30 menit ya! 🧒"
+                    else:
+                        fallback_reply += " Untuk anak-anak, masih cukup aman bermain di luar. Tapi tetap awasi dan jangan lupa pakai sunscreen serta minum yang cukup ya! 🧒☀️"
+                
+                reply = clean_markdown(fallback_reply)
         else:
             # Fallback AI tidak tersedia
             uv = weather.get('uv_index', 5)
             aqi = air_quality.get('aqi', 0)
             aqi_status = air_quality.get('status', 'Baik')
+            temp = int(weather.get('temperature', 0))
+            humidity = int(weather.get('humidity', 0))
             
-            reply = f"Hai! 👋 Dengan suhu {int(weather.get('temperature', 0))}°C dan kelembaban {int(weather.get('humidity', 0))}%, cuaca terasa { 'gerah' if weather.get('humidity', 0) > 70 else 'normal'}."
+            fallback_reply = f"Hai! 👋 Dengan suhu {temp}°C dan kelembaban {humidity}%, cuaca terasa {'gerah' if humidity > 70 else 'normal'}."
             
-            if weather.get('uv_index', 0) > 6:
-                reply += f" **UV Index {weather.get('uv_index', 0):.1f}** cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
+            if uv > 6:
+                fallback_reply += f" UV Index {uv:.1f} cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
             
             if aqi > 100:
-                reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). 😷 Sebaiknya pakai masker jika beraktivitas di luar."
+                fallback_reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). Sebaiknya pakai masker jika beraktivitas di luar."
             
-            if "gerimis" in message_lower or "lebat" in message_lower:
-                reply += " Perbedaan hujan gerimis dan hujan lebat: gerimis memiliki tetesan kecil dan intensitas rendah (<0.5 mm/jam), sementara hujan lebat memiliki tetesan besar dan intensitas tinggi (>7.5 mm/jam) yang bisa menyebabkan genangan air."
+            if "anak" in message_lower and ("main" in message_lower or "luar" in message_lower):
+                if aqi > 100 or uv > 7:
+                    fallback_reply += " Untuk anak-anak, sebaiknya batasi bermain di luar karena UV tinggi dan kualitas udara tidak sehat. Jika terpaksa, pastikan pakai sunscreen, topi, dan masker, serta jangan lebih dari 30 menit ya! 🧒"
+                else:
+                    fallback_reply += " Untuk anak-anak, masih cukup aman bermain di luar. Tapi tetap awasi dan jangan lupa pakai sunscreen serta minum yang cukup ya! 🧒☀️"
+            
+            reply = clean_markdown(fallback_reply)
         
         # Pastikan reply tidak terpotong di tengah kalimat
         if reply and not reply[-1] in '.!?':
             # Cari titik terakhir
             last_period = reply.rfind('.')
-            if last_period > len(reply) * 0.7:  # Jika sudah lewat 70%
+            if last_period > len(reply) * 0.7:
                 reply = reply[:last_period+1]
         
         return {"reply": reply}
@@ -4159,4 +4202,4 @@ JAWABAN:"""
         return {"reply": "Maaf, saya sedang mengalami gangguan teknis. Silakan coba lagi nanti."}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
