@@ -1981,9 +1981,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     <div class="chat-bubble" id="chatBubble">
         <div class="chat-header">
-            <div class="chat-header-icon">
-                <i class="fas fa-robot"></i>
-            </div>
             <div class="chat-header-info">
                 <h4>Ashley</h4>
                 <p>Asisten Cuaca Cerdas</p>
@@ -1999,7 +1996,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <div class="chat-messages" id="chatMessages">
             <div class="chat-message bot">
                 <div class="chat-avatar">
-                    <i class="fas fa-robot"></i>
+                    <img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
                 </div>
                 <div class="chat-bubble-text">
                     Halo! Saya Ashley 👋<br>Saya bisa membantu Anda dengan informasi cuaca, prakiraan, analisis, dan tips terkait cuaca. Ada yang bisa saya bantu?
@@ -2798,7 +2795,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
         if (sender === 'bot') {{
-            avatar.innerHTML = '<i class="fas fa-robot"></i>';
+            avatar.innerHTML = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
         }} else {{
             avatar.innerHTML = '<i class="fas fa-user"></i>';
         }}
@@ -2852,7 +2849,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
         if (sender === 'bot') {{
-            avatar.innerHTML = '<i class="fas fa-robot"></i>';
+            avatar.innerHTML = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
         }} else {{
             avatar.innerHTML = '<i class="fas fa-user"></i>';
         }}
@@ -2879,7 +2876,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
-        avatar.innerHTML = '<i class="fas fa-robot"></i>';
+        avatar.innerHTML = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
         
         const typingBubble = document.createElement('div');
         typingBubble.className = 'chat-typing';
