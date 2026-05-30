@@ -517,7 +517,7 @@ def get_current_weather(latitude: float, longitude: float):
         "latitude": latitude,
         "longitude": longitude,
         "current": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "precipitation", "weather_code", "wind_speed_10m", "surface_pressure"],
-        "daily": ["uv_index_max"],
+        "daily": ["uv_index_max", "precipitation_sum"],
         "timezone": "auto",
     }
     try:
@@ -526,12 +526,17 @@ def get_current_weather(latitude: float, longitude: float):
         current = data.get("current", {})
         daily = data.get("daily", {})
         uv = daily.get("uv_index_max", [0])[0] if daily.get("uv_index_max") else 5
+        # Gunakan total hujan hari ini (precipitation_sum) agar konsisten dengan prakiraan 6 hari
+        # Fallback ke current precipitation jika tidak tersedia
+        today_rain = daily.get("precipitation_sum", [None])[0]
+        if today_rain is None:
+            today_rain = current.get("precipitation", 0)
 
         return {
             "temperature": current.get("temperature_2m", 0),
             "feels_like": current.get("apparent_temperature", 0),
             "humidity": current.get("relative_humidity_2m", 0),
-            "precipitation": current.get("precipitation", 0),
+            "precipitation": today_rain,
             "wind_speed": current.get("wind_speed_10m", 0),
             "pressure": current.get("surface_pressure", 0),
             "weather_code": current.get("weather_code", 0),
@@ -1343,6 +1348,18 @@ def render_page(content: str, active: str = "home", message: str = None, message
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/static/styles.css">
     {location_data}
+    <script>
+        // Terapkan dark mode SECEPATNYA (di head) agar tidak ada flash putih saat pindah halaman
+        (function() {{
+            if (localStorage.getItem('theme') === 'dark') {{
+                document.documentElement.classList.add('dark');
+                // body belum ada saat head diproses, pakai event
+                document.addEventListener('DOMContentLoaded', function() {{
+                    document.body.classList.add('dark');
+                }}, {{once: true}});
+            }}
+        }})();
+    </script>
     <style>
         /* Custom Alert/Notification Styles */
         .custom-alert {{
@@ -1494,7 +1511,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
             border: none;
             color: var(--text-tertiary);
             cursor: pointer;
-            font-size: 18px;
             transition: all 0.2s ease;
         }}
 
@@ -1686,88 +1702,38 @@ def render_page(content: str, active: str = "home", message: str = None, message
             border-top-right-radius: 4px;
         }}
 
-        /* Typing Indicator */
+        /* Typing Indicator - efek kursor berkedip (natural typing) */
         .chat-typing {{
             display: flex;
+            align-items: center;
             gap: 4px;
             padding: 10px 14px;
             background: #f1f5f9;
             border-radius: 18px;
             border-top-left-radius: 4px;
             width: fit-content;
+            font-family: monospace;
+            font-size: 13px;
+            color: #475569;
         }}
         body.dark .chat-typing {{
             background: #334155;
+            color: #cbd5e1;
         }}
-        .chat-typing span {{
-            width: 8px;
-            height: 8px;
-            background: #94a3b8;
-            border-radius: 50%;
-            animation: typingBounce 1.4s infinite ease-in-out;
+        .typing-cursor {{
+            display: inline-block;
+            width: 2px;
+            height: 16px;
+            background-color: #8b5cf6;
+            margin-left: 2px;
+            animation: blink 1s step-end infinite;
+            vertical-align: middle;
         }}
-        body.dark .chat-typing span {{
-            background: #cbd5e1;
+        @keyframes blink {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0; }}
         }}
-        @keyframes typingBounce {{
-            0%,60%,100% {{ transform: translateY(0); opacity: 0.5; }}
-            30% {{ transform: translateY(-8px); opacity: 1; }}
-        }}
-        .chat-typing span:nth-child(1) {{ animation-delay: 0s; }}
-        .chat-typing span:nth-child(2) {{ animation-delay: 0.2s; }}
-        .chat-typing span:nth-child(3) {{ animation-delay: 0.4s; }}
-
-        /* Chat Input */
-        .chat-input-area {{
-            padding: 16px;
-            border-top: 1px solid #e2e8f0;
-            display: flex;
-            gap: 10px;
-            flex-shrink: 0;
-        }}
-        body.dark .chat-input-area {{
-            border-top-color: #334155;
-        }}
-        .chat-input-area input {{
-            flex: 1;
-            padding: 12px 16px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 28px;
-            color: #0f172a;
-            font-family: inherit;
-            font-size: 13px;
-        }}
-        body.dark .chat-input-area input {{
-            background: #1e293b;
-            border-color: #475569;
-            color: #f1f5f9;
-        }}
-        .chat-input-area input:focus {{
-            outline: none;
-            border-color: #3b82f6;
-        }}
-        .chat-input-area button {{
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #a855f7);
-            border: none;
-            border-radius: 50%;
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-        .chat-input-area button:hover {{
-            transform: scale(1.05);
-        }}
-        .chat-input-area button:disabled {{
-            opacity: 0.5;
-            cursor: not-allowed;
-        }}
-
+        
         /* Chat Scrollbar */
         .chat-messages::-webkit-scrollbar {{
             width: 4px;
@@ -1883,7 +1849,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     </div>
                     <div class="team-info">
                         <h3 class="team-name-enhanced">Arya Satya</h3>
-                        <p class="team-role">Lead Dev Engineer</p>
+                        <p class="team-role">Lead Fullstack Developer</p>
                         <div class="team-nim-enhanced">
                             <i class="fas fa-id-card"></i> 15240231
                         </div>
@@ -1900,7 +1866,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     </div>
                     <div class="team-info">
                         <h3 class="team-name-enhanced">Kevin Handerson</h3>
-                        <p class="team-role">UI/UX Designer</p>
+                        <p class="team-role">Jurnal Editor & Riset</p>
                         <div class="team-nim-enhanced">
                             <i class="fas fa-id-card"></i> 15240235
                         </div>
@@ -1916,8 +1882,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
                         <img src="/static/images/yoseph.jpeg" alt="WeatherAI Property">
                     </div>
                     <div class="team-info">
-                        <h3 class="team-name-enhanced">Yosep Wai</h3>
-                        <p class="team-role">Content Writer</p>
+                        <h3 class="team-name-enhanced">Yoseph Wai</h3>
+                        <p class="team-role">Jurnal Editor & Riset</p>
                         <div class="team-nim-enhanced">
                             <i class="fas fa-id-card"></i> 15240476
                         </div>
@@ -1934,13 +1900,30 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     </div>
                     <div class="team-info">
                         <h3 class="team-name-enhanced">Stanislaus Ratu</h3>
-                        <p class="team-role">Research Writer</p>
+                        <p class="team-role">Presentation Desain</p>
                         <div class="team-nim-enhanced">
                             <i class="fas fa-id-card"></i> 15240782
                         </div>
                         <div class="team-social">
                             <a href="https://wa.me/6281237325309" class="social-icon"><i class="fab fa-whatsapp"></i></a>
                             <a href="https://www.instagram.com/sstenjo?igsh=MW0xbXF0eW8xdmM2Zg==" class="social-icon"><i class="fab fa-instagram"></i></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="team-card-enhanced">
+                    <div class="card-glow"></div>
+                    <div class="team-avatar-enhanced">
+                        <img src="/static/images/ferdinand.jpeg" alt="WeatherAI Property">
+                    </div>
+                    <div class="team-info">
+                        <h3 class="team-name-enhanced">Ferdinand Nugroho</h3>
+                        <p class="team-role">Spokesperson</p>
+                        <div class="team-nim-enhanced">
+                            <i class="fas fa-id-card"></i> 15240250
+                        </div>
+                        <div class="team-social">
+                            <a href="https://wa.me/6282115441780" class="social-icon"><i class="fab fa-whatsapp"></i></a>
+                            <a href="https://www.instagram.com/p/DSICYHjD-4M/?igsh=MW9yaXVqbGJlendvYw==" class="social-icon"><i class="fab fa-instagram"></i></a>
                         </div>
                     </div>
                 </div>
@@ -2002,9 +1985,12 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 <i class="fas fa-robot"></i>
             </div>
             <div class="chat-header-info">
-                <h4>Ashley AI</h4>
+                <h4>Ashley</h4>
                 <p>Asisten Cuaca Cerdas</p>
             </div>
+            <button onclick="clearChatHistory()" title="Hapus riwayat chat" style="background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:14px;padding:4px 8px;border-radius:8px;transition:color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-tertiary)'">
+                <i class="fas fa-trash-alt"></i>
+            </button>
             <div class="chat-close" onclick="toggleChat()">
                 <i class="fas fa-times"></i>
             </div>
@@ -2745,8 +2731,9 @@ def render_page(content: str, active: str = "home", message: str = None, message
         }});
     }}
 
-    // ============ AI CHAT ASHLEY ============
+    // ============ AI CHAT ASHLEY dengan Typing Animation ============
     let isTyping = false;
+    let currentTypingTimeout = null;
 
     function toggleChat() {{
         const bubble = document.getElementById('chatBubble');
@@ -2767,7 +2754,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         input.value = '';
         
         addChatMessage('user', message);
-        showTypingIndicator();
+        showTypingIndicator(); // Tampilkan indikator mengetik dengan kursor berkedip
         isTyping = true;
         
         const sendBtn = document.getElementById('chatSendBtn');
@@ -2783,21 +2770,75 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }});
             
             const data = await response.json();
+            const fullReply = data.reply || 'Maaf, saya sedang mengalami gangguan. Silakan coba lagi nanti.';
             
             removeTypingIndicator();
-            addChatMessage('bot', data.reply || 'Maaf, saya sedang mengalami gangguan. Silakan coba lagi nanti.');
+            // Tampilkan dengan efek mengetik huruf per huruf
+            typeMessage('bot', fullReply);
             
         }} catch (error) {{
             console.error('Chat error:', error);
             removeTypingIndicator();
-            addChatMessage('bot', 'Maaf, terjadi kesalahan koneksi. Silakan coba lagi.');
+            typeMessage('bot', 'Maaf, terjadi kesalahan koneksi. Silakan coba lagi.');
         }} finally {{
             isTyping = false;
             if (sendBtn) sendBtn.disabled = false;
-            scrollChatToBottom();
         }}
     }}
 
+    // Fungsi untuk menampilkan pesan dengan efek mengetik huruf per huruf
+    function typeMessage(sender, fullText) {{
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!messagesContainer) return;
+        
+        // Buat elemen pesan kosong
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${{sender}}`;
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'chat-avatar';
+        if (sender === 'bot') {{
+            avatar.innerHTML = '<i class="fas fa-robot"></i>';
+        }} else {{
+            avatar.innerHTML = '<i class="fas fa-user"></i>';
+        }}
+        
+        const bubbleText = document.createElement('div');
+        bubbleText.className = 'chat-bubble-text';
+        bubbleText.innerHTML = ''; // Kosong, akan diisi perlahan
+        
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(bubbleText);
+        
+        messagesContainer.appendChild(messageDiv);
+        scrollChatToBottom();
+        
+        // Efek mengetik huruf per huruf
+        let index = 0;
+        const typingSpeed = 25; // milidetik per huruf (natural typing)
+        
+        function addNextChar() {{
+            if (index < fullText.length) {{
+                const currentChar = fullText.charAt(index);
+                // Handle newline menjadi <br>
+                if (currentChar === '\\n') {{
+                    bubbleText.innerHTML += '<br>';
+                }} else {{
+                    bubbleText.innerHTML += currentChar;
+                }}
+                index++;
+                scrollChatToBottom();
+                currentTypingTimeout = setTimeout(addNextChar, typingSpeed);
+            }} else {{
+                // Selesai mengetik, simpan history
+                saveChatHistory();
+            }}
+        }}
+        
+        addNextChar();
+    }}
+    
+    // Fungsi untuk menambah pesan langsung (tanpa efek ketik)
     function addChatMessage(sender, text) {{
         const messagesContainer = document.getElementById('chatMessages');
         if (!messagesContainer) return;
@@ -2842,7 +2883,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         const typingBubble = document.createElement('div');
         typingBubble.className = 'chat-typing';
-        typingBubble.innerHTML = '<span></span><span></span><span></span>';
+        typingBubble.innerHTML = '<span class="typing-cursor"></span>';
         
         typingDiv.appendChild(avatar);
         typingDiv.appendChild(typingBubble);
@@ -2861,6 +2902,72 @@ def render_page(content: str, active: str = "home", message: str = None, message
         if (messagesContainer) {{
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }}
+    }}
+
+    // ===== CHAT PERSISTENCE via sessionStorage =====
+    const CHAT_STORAGE_KEY = 'ashley_chat_history';
+
+    function saveChatHistory() {{
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!messagesContainer) return;
+        // Simpan semua pesan (kecuali typing indicator)
+        const messages = [];
+        messagesContainer.querySelectorAll('.chat-message:not(#typingIndicator)').forEach(function(msgEl) {{
+            const sender = msgEl.classList.contains('bot') ? 'bot' : 'user';
+            const bubble = msgEl.querySelector('.chat-bubble-text');
+            if (bubble) messages.push({{ sender: sender, html: bubble.innerHTML }});
+        }});
+        try {{ sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages)); }} catch(e) {{}}
+    }}
+
+    function restoreChatHistory() {{
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!messagesContainer) return;
+        let saved;
+        try {{ saved = JSON.parse(sessionStorage.getItem(CHAT_STORAGE_KEY)); }} catch(e) {{ return; }}
+        if (!saved || saved.length === 0) return;
+
+        // Hapus pesan sambutan default, ganti dengan history
+        messagesContainer.innerHTML = '';
+        const botImg = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        saved.forEach(function(msg) {{
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message ' + msg.sender;
+            const avatar = document.createElement('div');
+            avatar.className = 'chat-avatar';
+            avatar.innerHTML = msg.sender === 'bot' ? botImg : '<i class="fas fa-user"></i>';
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble-text';
+            bubble.innerHTML = msg.html;
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(bubble);
+            messagesContainer.appendChild(messageDiv);
+        }});
+        scrollChatToBottom();
+    }}
+
+    // Patch addChatMessage dan typeMessage agar auto-save
+    const _origAddChatMessage = addChatMessage;
+    function addChatMessage(sender, text) {{
+        _origAddChatMessage(sender, text);
+        saveChatHistory();
+    }}
+
+    // Restore chat saat halaman load
+    document.addEventListener('DOMContentLoaded', function() {{
+        restoreChatHistory();
+    }});
+
+    function clearChatHistory() {{
+        try {{ sessionStorage.removeItem(CHAT_STORAGE_KEY); }} catch(e) {{}}
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!messagesContainer) return;
+        const botImg = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        messagesContainer.innerHTML = `
+            <div class="chat-message bot">
+                <div class="chat-avatar">${{botImg}}</div>
+                <div class="chat-bubble-text">Halo! Saya Ashley 👋<br>Saya bisa membantu Anda dengan informasi cuaca, prakiraan, analisis, dan tips terkait cuaca. Ada yang bisa saya bantu?</div>
+            </div>`;
     }}
 
     document.addEventListener('click', function(event) {{
@@ -2923,7 +3030,7 @@ async def home(request: Request):
             <div class="forecast-icon">{get_weather_icon_html(day["weather_code"])}</div>
             <div class="forecast-temp">{int(day["temp_max"])}°</div>
             <div class="forecast-temp-min">{int(day["temp_min"])}°</div>
-            <div class="forecast-precip"><i class="fas fa-tint"></i> {int(day["precipitation"])}mm</div>
+            <div class="forecast-precip"><i class="fas fa-tint"></i> {weather["precipitation"]:.1f} mm</div>
         </div>
         """
 
@@ -3830,9 +3937,9 @@ async def about_page(request: Request, message: str = None, type: str = None):
                 <span class="card-title"><i class="fas fa-info-circle"></i> introduction</span>
             </div>
             <div class="section-content">
-                <p><strong>WeatherAI</strong> adalah aplikasi prediksi cuaca berbasis Artificial Intelligence yang menyajikan informasi meteorologi real-time, prakiraan jangka pendek, serta analisis cuaca dalam bahasa alami. Aplikasi ini mengintegrasikan data dari Open-Meteo API, model Machine Learning Random Forest untuk prediksi suhu, dan Ashley untuk menghasilkan wawasan cuaca yang kontekstual. Dengan antarmuka modern, dark mode, serta fitur penyimpanan lokasi favorit, WeatherAI hadir sebagai solusi prediksi cuaca yang praktis, akurat, dan ramah pengguna.</p>
-                <p><strong>Fitur utama</strong> meliputi cuaca real-time (suhu, kelembaban, angin, tekanan, UV), prakiraan 6 hari, kualitas udara (AQI, PM2.5, PM10), serta pencarian lokasi berdasarkan nama kota atau koordinat GPS. Fitur unggulan lainnya adalah deteksi kondisi cuaca dari gambar menggunakan Deep Learning CNN, dan analisis Ashley yang memberikan deskripsi natural serta peringatan dini kondisi ekstrem.</p>
-                <p><strong>Cara kerja</strong> aplikasi: sistem mengambil data cuaca dari API berdasarkan koordinat lokasi, lalu model Random Forest memprediksi suhu 6 hari ke depan. Untuk deteksi gambar, CNN mengklasifikasikan foto pemandangan ke kategori cuaca. Semua data kemudian diproses Gemini AI menjadi narasi analisis yang mudah dipahami. Kombinasi real-time data, machine learning, deep learning, dan AI generatif menjadikan WeatherAI lebih cerdas dan akurat dibanding aplikasi cuaca konvensional.</p>
+                <p><strong>WeatherAI</strong> adalah aplikasi prediksi cuaca berbasis Artificial Intelligence yang menyajikan informasi meteorologi real-time, prakiraan 6 hari ke depan, serta analisis cuaca dalam bahasa alami. Aplikasi ini mengintegrasikan data dari Open-Meteo API, model Machine Learning Random Forest untuk prediksi suhu, dan <strong>Ashley</strong> — asisten AI berbasis Gemini — untuk menghasilkan wawasan cuaca yang kontekstual dan mudah dipahami. Dengan antarmuka modern, dark mode persisten, serta fitur penyimpanan lokasi favorit, WeatherAI hadir sebagai solusi prediksi cuaca yang praktis, akurat, dan ramah pengguna.</p>
+                <p><strong>Fitur utama</strong> meliputi cuaca real-time (suhu, kelembaban, angin, tekanan udara, UV index), data curah hujan harian akurat menggunakan <em>precipitation_sum</em>, prakiraan 6 hari, kualitas udara (AQI, PM2.5, PM10), serta pencarian lokasi berdasarkan nama kota atau koordinat GPS. Fitur unggulan lainnya adalah deteksi kondisi cuaca dari gambar menggunakan Deep Learning CNN dengan 5 kategori (cerah, berawan, hujan, berkabut, fajar), dan chat AI Ashley yang riwayat percakapannya tetap tersimpan selama sesi berlangsung meski berpindah halaman.</p>
+                <p><strong>Cara kerja</strong> aplikasi: sistem mengambil data cuaca dari Open-Meteo API berdasarkan koordinat lokasi, lalu model Random Forest memprediksi suhu 6 hari ke depan. Curah hujan ditampilkan sebagai akumulasi harian (<em>precipitation_sum</em>) sehingga konsisten antara dashboard dan prakiraan. Untuk deteksi gambar, CNN mengklasifikasikan foto pemandangan ke kategori cuaca. Semua data kemudian diproses Gemini AI menjadi narasi analisis yang mudah dipahami. Kombinasi real-time data, machine learning, deep learning, dan AI generatif menjadikan WeatherAI lebih cerdas dan akurat dibanding aplikasi cuaca konvensional.</p>
             </div>
         </div>
 
@@ -3870,8 +3977,9 @@ async def about_page(request: Request, message: str = None, type: str = None):
             </div>
             <div class="section-content">
                 <p>WeatherAI menghormati dan melindungi privasi setiap pengguna. Aplikasi ini <strong>tidak mengumpulkan, menyimpan, atau membagikan data pribadi</strong> seperti nama, alamat email, nomor telepon, atau lokasi spesifik pengguna ke pihak manapun. Semua data cuaca yang ditampilkan diperoleh secara langsung dari API publik Open-Meteo dan diproses secara anonim serta real-time tanpa disimpan dalam database server.</p>
-                <p><strong>Data lokasi yang Anda simpan</strong> (seperti nama kota favorit dan koordinat GPS) hanya tersimpan secara lokal di dalam database perangkat Anda sendiri menggunakan SQLite. Data ini tidak pernah dikirim ke server eksternal manapun dan dapat Anda hapus kapan saja melalui antarmuka aplikasi dengan menekan tombol hapus pada sidebar lokasi tersimpan.</p>
-                <p>Untuk fitur <strong>AI Assistant (Ashley)</strong>, data cuaca dan kualitas udara secara real-time hanya digunakan untuk menghasilkan analisis cuaca. Data tersebut tidak disimpan oleh Google untuk keperluan pelatihan model. Kami tidak menggunakan cookie pelacak, tidak menanamkan tracker iklan, dan tidak memonetisasi data pengguna. Keamanan dan kenyamanan Anda adalah prioritas utama kami.</p>
+                <p><strong>Data lokasi yang Anda simpan</strong> (seperti nama kota favorit dan koordinat GPS) hanya tersimpan secara lokal di perangkat Anda sendiri menggunakan SQLite. Data ini tidak pernah dikirim ke server eksternal manapun dan dapat Anda hapus kapan saja melalui tombol hapus pada sidebar lokasi tersimpan.</p>
+                <p><strong>Preferensi tampilan</strong> seperti mode gelap (dark mode) disimpan di <em>localStorage</em> browser Anda sehingga tetap aktif meski berpindah halaman atau menutup browser. Riwayat percakapan dengan Ashley disimpan sementara di <em>sessionStorage</em> — hanya berlaku selama sesi browser aktif dan otomatis terhapus saat tab atau browser ditutup. Data ini sepenuhnya bersifat lokal dan tidak dikirim ke server.</p>
+                <p>Untuk fitur <strong>AI Assistant (Ashley)</strong>, data cuaca dan kualitas udara real-time hanya digunakan untuk menghasilkan analisis cuaca. Kami tidak menggunakan cookie pelacak, tidak menanamkan tracker iklan, dan tidak memonetisasi data pengguna. Keamanan dan kenyamanan Anda adalah prioritas utama kami.</p>
             </div>
         </div>
     </div>
@@ -4006,7 +4114,7 @@ async def train_image_classifier_route(dataset_path: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ============ AI CHAT ASHLEY ENDPOINT (DIPERBAIKI) ============
+# ============ AI CHAT ASHLEY ENDPOINT ============
 @app.post("/chat-ai")
 async def chat_ai(chat: ChatMessage):
     """Endpoint untuk chat AI Ashley dengan batasan topik cuaca"""
@@ -4080,7 +4188,6 @@ async def chat_ai(chat: ChatMessage):
         condition = get_condition_text(weather.get("weather_code", 0))
         
         # Buat prompt untuk Gemini dengan konteks cuaca
-        # TIDAK ADA BATASAN KATA DI PROMPT INI!
         prompt = f"""Kamu adalah Ashley, asisten cuaca yang santai dan profesional. Jawab pertanyaan pengguna tentang cuaca dengan lengkap, informatif, dan natural. Gunakan bahasa Indonesia yang santai tapi tetap informatif.
 
 DATA CUACA REAL-TIME ({location_name}):
@@ -4112,7 +4219,7 @@ JAWABAN:"""
                 word_count = len(response_text.split())
                 print(f"INFO:    Chat response received (panjang: {word_count} kata)")
                 
-                # Validasi panjang response seperti di AI Insights
+                # Validasi panjang response
                 if word_count < 50 or word_count > 500:
                     print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback")
                     # Fallback pintar
@@ -4202,4 +4309,4 @@ JAWABAN:"""
         return {"reply": "Maaf, saya sedang mengalami gangguan teknis. Silakan coba lagi nanti."}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="localhost", port=8080)
