@@ -2024,6 +2024,32 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <i class="fas fa-bars"></i>
     </button>
 
+    <!-- Bottom Navigation - Mobile Only -->
+    <nav class="bottom-nav" id="bottomNav">
+        <a href="/" class="bottom-nav-item {active_home}" data-page="home">
+            <i class="fas fa-home"></i>
+            <span>Beranda</span>
+        </a>
+        <a href="/main" class="bottom-nav-item {active_ml}" data-page="ml">
+            <i class="fas fa-brain"></i>
+            <span>Main</span>
+        </a>
+        <a href="/ulasan" class="bottom-nav-item {active_ulasan}" data-page="ulasan">
+            <i class="fas fa-edit"></i>
+            <span>Ulasan</span>
+        </a>
+        <a href="/about" class="bottom-nav-item {active_about}" data-page="about">
+            <i class="fas fa-info-circle"></i>
+            <span>Tentang</span>
+        </a>
+        <button class="bottom-nav-item bottom-nav-menu" onclick="toggleSidebar()" aria-label="Menu">
+            <i class="fas fa-bars"></i>
+            <span>Menu</span>
+        </button>
+    </nav>
+
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
     <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -2214,15 +2240,31 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     function toggleSidebar() {{
         var sidebar = document.getElementById('sidebar');
-        if (sidebar) sidebar.classList.toggle('open');
+        var backdrop = document.getElementById('sidebarBackdrop');
+        if (sidebar) {{
+            var isOpen = sidebar.classList.toggle('open');
+            if (backdrop) backdrop.classList.toggle('active', isOpen);
+        }}
+    }}
+
+    function closeSidebar() {{
+        var sidebar = document.getElementById('sidebar');
+        var backdrop = document.getElementById('sidebarBackdrop');
+        if (sidebar) sidebar.classList.remove('open');
+        if (backdrop) backdrop.classList.remove('active');
     }}
 
     document.addEventListener('click', function(event) {{
         var sidebar = document.getElementById('sidebar');
         var toggle = document.getElementById('menuToggle');
-        if (window.innerWidth <= 768 && sidebar && toggle) {{
-            if (!sidebar.contains(event.target) && !toggle.contains(event.target)) {{
+        var bottomMenu = document.querySelector('.bottom-nav-menu');
+        var backdrop = document.getElementById('sidebarBackdrop');
+        if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('open')) {{
+            var clickedInsideSidebar = sidebar.contains(event.target);
+            var clickedToggle = (toggle && toggle.contains(event.target)) || (bottomMenu && bottomMenu.contains(event.target));
+            if (!clickedInsideSidebar && !clickedToggle) {{
                 sidebar.classList.remove('open');
+                if (backdrop) backdrop.classList.remove('active');
             }}
         }}
     }});
