@@ -2347,25 +2347,12 @@ body.dark .notification-close {
 
 /* Responsive chat untuk mobile */
 @media (max-width: 768px) {
-    .chat-toggle {
-        bottom: 20px;
-        right: 80px;
-        width: 44px;
-        height: 44px;
-        font-size: 20px;
-    }
-    
     .chat-bubble {
         width: calc(100vw - 40px);
         right: 20px;
-        bottom: 80px;
+        bottom: 136px;
         height: 500px;
-        max-height: calc(100vh - 100px);
-    }
-    
-    .theme-toggle {
-        bottom: 20px;
-        right: 20px;
+        max-height: calc(100vh - 200px);
     }
 }
 
@@ -2406,7 +2393,7 @@ body.dark .notification-close {
         bottom: 0;
         left: 0;
         right: 0;
-        z-index: 300;
+        z-index: 350;
         background: var(--card-bg);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
@@ -2415,6 +2402,7 @@ body.dark .notification-close {
         justify-content: space-around;
         align-items: center;
         box-shadow: 0 -4px 24px rgba(0,0,0,0.10);
+        pointer-events: auto;
     }
 
     .bottom-nav-item {
@@ -2430,6 +2418,10 @@ body.dark .notification-close {
         font-weight: 600;
         transition: all 0.2s ease;
         min-width: 56px;
+        cursor: pointer;
+        pointer-events: auto;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
     }
 
     .bottom-nav-item i {
@@ -2463,6 +2455,7 @@ body.dark .notification-close {
         width: 48px;
         height: 48px;
         font-size: 20px;
+        z-index: 400;
     }
 
     .chat-bubble {
