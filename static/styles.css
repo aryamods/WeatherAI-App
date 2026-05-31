@@ -2444,6 +2444,18 @@ body.dark .notification-close {
         transform: translateY(-2px);
     }
 
+    .bottom-nav-menu {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .bottom-nav-menu:hover,
+    .bottom-nav-menu:active {
+        color: var(--accent);
+    }
+
     .menu-toggle {
         display: none !important;
     }
