@@ -1947,12 +1947,13 @@ body.dark .notification-close {
         position: fixed;
         left: -100%;
         top: 0;
-        width: min(320px, 85%);
+        width: 50%;
         z-index: 160;
         transition: left 0.3s ease;
         border-radius: 0 32px 32px 0;
         height: 100vh;
-        padding: 24px 18px;
+        padding: 24px 14px;
+        overflow-y: auto;
     }
     
     .sidebar.open {
@@ -2066,7 +2067,27 @@ body.dark .notification-close {
     .sidebar-nav {
         gap: 10px;
     }
-    
+
+    .nav-item {
+        font-size: 12px;
+        padding: 10px 12px;
+        gap: 10px;
+    }
+
+    .nav-item i {
+        font-size: 14px;
+        width: 18px;
+    }
+
+    .sidebar-logo-text {
+        font-size: 14px !important;
+    }
+
+    .sidebar-section-title {
+        font-size: 9px;
+        letter-spacing: 1px;
+    }
+
     .sidebar-section {
         margin-top: 28px;
         padding-top: 20px;
