@@ -1921,12 +1921,15 @@ body.dark .notification-close {
         left: -100%;
         width: min(320px, 100%);
         max-width: 320px;
-        z-index: 150;
+        z-index: 160;
         transition: left 0.3s ease;
         border-radius: 0 32px 32px 0;
         height: 100vh;
         overflow-y: auto;
+        overflow-x: hidden;
         padding: 24px 18px;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
     }
     
     .sidebar.open {
@@ -2566,9 +2569,9 @@ body.dark .notification-close {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.4);
+        background: rgba(0,0,0,0.5);
         z-index: 140;
-        backdrop-filter: blur(2px);
+        -webkit-tap-highlight-color: transparent;
     }
 
     .sidebar-backdrop.active {
