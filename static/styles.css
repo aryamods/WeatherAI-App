@@ -92,47 +92,83 @@ body::before {
     }
 }
 
-/* ============ SIDEBAR SCROLL FIX ============ */
-/* Satu titik scroll: sidebar itu sendiri */
+/* ============ SIDEBAR SCROLL ============ */
+/* Sidebar = flex column, overflow hidden */
+/* Hanya .sidebar-section (lokasi tersimpan) yang scroll */
 .sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header logo: tidak scroll, ukuran tetap */
+.sidebar-header {
+    flex-shrink: 0;
+}
+
+/* Wrapper konten: flex column, ambil sisa tinggi */
+.sidebar-content-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-right: 0;
+}
+
+/* Nav menu: tidak scroll, ukuran tetap */
+.sidebar-nav {
+    flex-shrink: 0;
+}
+
+/* Section lokasi: ambil sisa ruang dan scroll */
+.sidebar-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Judul section: tidak scroll */
+.sidebar-section-title {
+    flex-shrink: 0;
+}
+
+/* Daftar lokasi: scroll di sini saja */
+.sidebar-locations {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
+    gap: 10px;
+    padding-right: 4px;
     -webkit-overflow-scrolling: touch;
 }
 
-.sidebar-content-wrapper {
-    flex: 1;
-    min-height: 0;
-    overflow: visible;
-    padding-right: 4px;
+/* Tombol tambah lokasi: tidak scroll, selalu terlihat */
+.sidebar-section > a[href="/search"] {
+    flex-shrink: 0;
 }
 
-.sidebar-locations {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    overflow: visible;
-    padding-right: 6px;
+/* Scrollbar pada daftar lokasi */
+.sidebar-locations::-webkit-scrollbar {
+    width: 4px;
 }
 
-/* Scrollbar hanya pada .sidebar */
-.sidebar::-webkit-scrollbar {
-    width: 5px;
-}
-
-.sidebar::-webkit-scrollbar-track {
+.sidebar-locations::-webkit-scrollbar-track {
     background: var(--bg-tertiary);
     border-radius: 10px;
 }
 
-.sidebar::-webkit-scrollbar-thumb {
+.sidebar-locations::-webkit-scrollbar-thumb {
     background: var(--accent);
     border-radius: 10px;
 }
 
-.sidebar::-webkit-scrollbar-thumb:hover {
+.sidebar-locations::-webkit-scrollbar-thumb:hover {
     background: var(--accent-hover);
 }
 
@@ -883,8 +919,6 @@ body.dark .notification-close {
     position: sticky;
     top: 0;
     height: 100vh;
-    overflow-y: auto;
-    overflow-x: hidden;
     transition: var(--transition);
     z-index: 100;
     border-radius: 0 24px 24px 0;
@@ -978,7 +1012,11 @@ body.dark .notification-close {
     margin-top: 36px;
     padding-top: 24px;
     border-top: 1px solid var(--border-color);
-    flex-shrink: 0;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .sidebar-section-title {
@@ -1912,11 +1950,7 @@ body.dark .notification-close {
         transition: left 0.3s ease;
         border-radius: 0 32px 32px 0;
         height: 100vh;
-        overflow-y: auto;
-        overflow-x: hidden;
         padding: 24px 18px;
-        touch-action: pan-y;
-        -webkit-overflow-scrolling: touch;
     }
     
     .sidebar.open {
