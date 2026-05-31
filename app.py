@@ -2990,31 +2990,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
         initImageClassifier();
     }}
     </script>
-
-    <!-- BOTTOM NAVIGATION MOBILE -->
-    <nav class="bottom-nav" id="bottomNav">
-        <a href="/" class="bottom-nav-item {active_home}">
-            <i class="fas fa-home"></i>
-            <span>Beranda</span>
-        </a>
-        <a href="/main" class="bottom-nav-item {active_ml}">
-            <i class="fas fa-brain"></i>
-            <span>Prediksi</span>
-        </a>
-        <a href="/ulasan" class="bottom-nav-item {active_ulasan}">
-            <i class="fas fa-edit"></i>
-            <span>Ulasan</span>
-        </a>
-        <a href="/about" class="bottom-nav-item {active_about}">
-            <i class="fas fa-info-circle"></i>
-            <span>Tentang</span>
-        </a>
-        <button class="bottom-nav-item" onclick="toggleSidebar()" style="background:none;border:none;outline:none;">
-            <i class="fas fa-map-marker-alt"></i>
-            <span>Lokasi</span>
-        </button>
-    </nav>
-
 </body>
 </html>"""
     return html_content
