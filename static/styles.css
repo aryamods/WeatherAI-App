@@ -1405,23 +1405,21 @@ body.dark .notification-close {
 
 /* ============ THEME SWITCH IN HEADER ============ */
 
-/* Sidebar header: logo kiri, switch kanan */
 .sidebar-logo-group {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-/* Switch wrapper: ☀️ [track] 🌙 — inline, tidak wrap */
+/* Wrapper label — hanya track, tidak ada ikon luar */
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
-    gap: 6px;
     margin-left: auto;
     flex-shrink: 0;
     cursor: pointer;
     user-select: none;
-    padding: 4px 6px;
+    padding: 3px;
     border-radius: 50px;
     transition: background 0.2s ease;
 }
@@ -1430,44 +1428,22 @@ body.dark .notification-close {
     background: var(--accent-soft);
 }
 
-/* Ikon matahari & bulan */
-.theme-icon-light {
-    font-size: 13px;
-    color: #f59e0b;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    filter: drop-shadow(0 0 3px rgba(245,158,11,0.6));
-    transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.theme-icon-dark {
-    font-size: 12px;
-    color: #8b5cf6;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    filter: drop-shadow(0 0 3px rgba(139,92,246,0.5));
-    transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-/* Track (pill) */
+/* Track — lebih lebar agar knob besar muat */
 .theme-switch-track {
     position: relative;
-    display: inline-flex;
-    align-items: center;
-    width: 44px;
-    height: 24px;
+    display: inline-block;
+    width: 56px;
+    height: 30px;
     border-radius: 50px;
-    background: linear-gradient(135deg, #fde68a, #fbbf24);
-    border: 1.5px solid rgba(251,191,36,0.5);
-    box-shadow: 0 2px 8px rgba(251,191,36,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
-    transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+    /* mode terang: langit biru muda */
+    background: linear-gradient(135deg, #bae6fd, #7dd3fc);
+    border: 1.5px solid rgba(125, 211, 252, 0.6);
+    box-shadow: 0 2px 10px rgba(125, 211, 252, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     flex-shrink: 0;
 }
 
-/* Input hidden di dalam track */
 .theme-switch-track input {
     opacity: 0;
     width: 0;
@@ -1476,41 +1452,61 @@ body.dark .notification-close {
     pointer-events: none;
 }
 
-/* Knob */
+/* Knob — lingkaran putih besar */
 .theme-switch-knob {
     position: absolute;
-    top: 2px;
-    left: 2px;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    background: #fffbeb;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* SVG ikon di dalam knob */
+.knob-sun,
+.knob-moon {
+    position: absolute;
     width: 16px;
     height: 16px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.22);
-    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), background 0.35s ease;
-    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Dark mode: track ungu */
+/* Default: tampilkan matahari, sembunyikan bulan */
+.knob-sun  { opacity: 1; transform: rotate(0deg) scale(1); }
+.knob-moon { opacity: 0; transform: rotate(-45deg) scale(0.6); }
+
+/* Dark mode — track: malam biru gelap */
 .theme-switch-track:has(input:checked) {
-    background: linear-gradient(135deg, #1e1b4b, #4c1d95);
-    border-color: rgba(139,92,246,0.5);
-    box-shadow: 0 2px 8px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+    background: linear-gradient(135deg, #0f172a, #1e1b4b);
+    border-color: rgba(139, 92, 246, 0.5);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-/* Dark mode: knob geser ke kanan */
+/* Dark mode — knob geser kanan, warna gelap */
 .theme-switch-track:has(input:checked) .theme-switch-knob {
-    transform: translateX(20px);
-    background: linear-gradient(135deg, #c4b5fd, #a78bfa);
-    box-shadow: 0 2px 8px rgba(167,139,250,0.5);
+    transform: translateX(26px);
+    background: #1e1b4b;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
 }
 
-/* Ikon aktif/non-aktif */
-.theme-switch-wrapper:has(input:checked) .theme-icon-light {
-    opacity: 0.4;
+/* Dark mode — tampilkan bulan, sembunyikan matahari */
+.theme-switch-track:has(input:checked) .knob-sun  {
+    opacity: 0;
+    transform: rotate(45deg) scale(0.6);
 }
-.theme-switch-wrapper:not(:has(input:checked)) .theme-icon-dark {
-    opacity: 0.4;
+.theme-switch-track:has(input:checked) .knob-moon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
 }
+
 
 .menu-toggle {
     position: fixed;
