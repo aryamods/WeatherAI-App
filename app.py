@@ -2848,11 +2848,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
-        if (sender === 'bot') {{
-            avatar.innerHTML = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
-        }} else {{
-            avatar.innerHTML = '<i class="fas fa-user"></i>';
-        }}
+        const botImg = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        avatar.innerHTML = sender === 'bot' ? botImg : '<i class="fas fa-user"></i>';
         
         const bubbleText = document.createElement('div');
         bubbleText.className = 'chat-bubble-text';
@@ -2863,6 +2860,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         messagesContainer.appendChild(messageDiv);
         scrollChatToBottom();
+        saveChatHistory();
     }}
 
     function showTypingIndicator() {{
@@ -2941,13 +2939,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
             messagesContainer.appendChild(messageDiv);
         }});
         scrollChatToBottom();
-    }}
-
-    // Patch addChatMessage dan typeMessage agar auto-save
-    const _origAddChatMessage = addChatMessage;
-    function addChatMessage(sender, text) {{
-        _origAddChatMessage(sender, text);
-        saveChatHistory();
     }}
 
     // Restore chat saat halaman load
@@ -4306,4 +4297,4 @@ JAWABAN:"""
         return {"reply": "Maaf, saya sedang mengalami gangguan teknis. Silakan coba lagi nanti."}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="localhost", port=8080)
