@@ -2062,7 +2062,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     <div class="sidebar-locations">
                         {sidebar_locations_html}
                     </div>
-                    <a href="/search" style="display: block; margin-top: 20px; text-align: center; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600;">
+                    <a href="/search" style="display: block; margin-top: 8px; text-align: center; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600;">
                         <i class="fas fa-plus-circle"></i> Tambah Lokasi
                     </a>
                 </div>
