@@ -2024,7 +2024,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <i class="fas fa-bars"></i>
     </button>
 
-    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
     <div class="app">
         <aside class="sidebar" id="sidebar">
@@ -2217,9 +2217,16 @@ def render_page(content: str, active: str = "home", message: str = None, message
     function toggleSidebar() {{
         var sidebar = document.getElementById('sidebar');
         var backdrop = document.getElementById('sidebarBackdrop');
-        if (sidebar) {{
-            var isOpen = sidebar.classList.toggle('open');
-            if (backdrop) backdrop.classList.toggle('active', isOpen);
+        if (!sidebar) return;
+        var isOpen = sidebar.classList.contains('open');
+        if (isOpen) {{
+            sidebar.classList.remove('open');
+            if (backdrop) backdrop.classList.remove('active');
+            document.body.style.overflow = '';
+        }} else {{
+            sidebar.classList.add('open');
+            if (backdrop) backdrop.classList.add('active');
+            document.body.style.overflow = 'hidden';
         }}
     }}
 
@@ -2228,22 +2235,28 @@ def render_page(content: str, active: str = "home", message: str = None, message
         var backdrop = document.getElementById('sidebarBackdrop');
         if (sidebar) sidebar.classList.remove('open');
         if (backdrop) backdrop.classList.remove('active');
+        document.body.style.overflow = '';
     }}
 
-    document.addEventListener('click', function(event) {{
-        var sidebar = document.getElementById('sidebar');
-        var toggle = document.getElementById('menuToggle');
-        var bottomMenu = document.querySelector('.bottom-nav-menu');
-        var backdrop = document.getElementById('sidebarBackdrop');
-        if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('open')) {{
-            var clickedInsideSidebar = sidebar.contains(event.target);
-            var clickedToggle = (toggle && toggle.contains(event.target)) || (bottomMenu && bottomMenu.contains(event.target));
-            if (!clickedInsideSidebar && !clickedToggle) {{
-                sidebar.classList.remove('open');
-                if (backdrop) backdrop.classList.remove('active');
-            }}
-        }}
-    }});
+    // Tutup sidebar hanya saat klik di backdrop langsung
+    var sidebarBackdrop = document.getElementById('sidebarBackdrop');
+    if (sidebarBackdrop) {{
+        sidebarBackdrop.addEventListener('click', function() {{
+            closeSidebar();
+        }});
+        sidebarBackdrop.addEventListener('touchend', function(e) {{
+            e.preventDefault();
+            closeSidebar();
+        }});
+    }}
+
+    // Cegah klik di dalam sidebar menutup sidebar
+    var sidebar = document.getElementById('sidebar');
+    if (sidebar) {{
+        sidebar.addEventListener('click', function(e) {{
+            e.stopPropagation();
+        }});
+    }}
 
     var fixedOffsetMap = {{
         'Asia/Jayapura': 'UTC+9', 'Asia/Tokyo': 'UTC+9', 'Asia/Seoul': 'UTC+9',
