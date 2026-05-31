@@ -3009,10 +3009,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
             <i class="fas fa-info-circle"></i>
             <span>Tentang</span>
         </a>
-        <a href="#" class="bottom-nav-item" onclick="toggleSidebar(); return false;">
+        <button class="bottom-nav-item" onclick="toggleSidebar()" style="background:none;border:none;outline:none;">
             <i class="fas fa-map-marker-alt"></i>
             <span>Lokasi</span>
-        </a>
+        </button>
     </nav>
 
 </body>
