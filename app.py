@@ -1271,7 +1271,7 @@ async def api_key_status():
         }
     return {"available": False, "keys": []}
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 selected_location = {
     "name": "Jakarta",
