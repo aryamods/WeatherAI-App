@@ -2024,6 +2024,33 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <i class="fas fa-bars"></i>
     </button>
 
+    <!-- Sidebar backdrop untuk mobile -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+
+    <!-- Bottom Navigation untuk mobile -->
+    <nav class="bottom-nav">
+        <a href="/" class="bottom-nav-item {active_home}">
+            <i class="fas fa-home"></i>
+            <span>Beranda</span>
+        </a>
+        <a href="/main" class="bottom-nav-item {active_ml}">
+            <i class="fas fa-brain"></i>
+            <span>Main</span>
+        </a>
+        <a href="/ulasan" class="bottom-nav-item {active_ulasan}">
+            <i class="fas fa-edit"></i>
+            <span>Ulasan</span>
+        </a>
+        <a href="/search" class="bottom-nav-item">
+            <i class="fas fa-search"></i>
+            <span>Lokasi</span>
+        </a>
+        <a href="/about" class="bottom-nav-item {active_about}">
+            <i class="fas fa-info-circle"></i>
+            <span>Tentang</span>
+        </a>
+    </nav>
+
     <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -2199,16 +2226,21 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     function toggleSidebar() {{
         var sidebar = document.getElementById('sidebar');
+        var backdrop = document.getElementById('sidebarBackdrop');
         if (sidebar) sidebar.classList.toggle('open');
+        if (backdrop) backdrop.classList.toggle('active');
     }}
 
     document.addEventListener('click', function(event) {{
         var sidebar = document.getElementById('sidebar');
         var toggle = document.getElementById('menuToggle');
+        var backdrop = document.getElementById('sidebarBackdrop');
         if (window.innerWidth <= 768 && sidebar && toggle) {{
             if (!sidebar.contains(event.target) && !toggle.contains(event.target)) {{
                 sidebar.classList.remove('open');
+                if (backdrop) backdrop.classList.remove('active');
             }}
+        }}
         }}
     }});
 
