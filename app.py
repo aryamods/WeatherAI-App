@@ -2024,51 +2024,51 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <i class="fas fa-bars"></i>
     </button>
 
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-logo-icon">
-                <i class="fas fa-cloud-sun"></i>
-            </div>
-            <div>
-                <div class="sidebar-logo-text">WeatherAI</div>
-            </div>
-        </div>
-
-        <div class="sidebar-content-wrapper">
-            <nav class="sidebar-nav">
-                <a href="/" class="nav-item {active_home}" data-page="home">
-                    <i class="fas fa-home"></i>
-                    <span>Beranda</span>
-                </a>
-                <a href="/main" class="nav-item {active_ml}" data-page="ml">
-                    <i class="fas fa-brain"></i>
-                    <span>Main</span>
-                </a>
-                <a href="/ulasan" class="nav-item {active_ulasan}" data-page="ulasan">
-                    <i class="fas fa-edit"></i>
-                    <span>Tulis Ulasan</span>
-                </a>
-                <a href="/about" class="nav-item {active_about}" data-page="about">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Tentang</span>
-                </a>
-            </nav>
-
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">
-                    <i class="fas fa-star"></i> Lokasi Tersimpan
-                </div>
-                <div class="sidebar-locations">
-                    {sidebar_locations_html}
-                </div>
-                <a href="/search" style="display: block; margin-top: 20px; text-align: center; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600;">
-                    <i class="fas fa-plus-circle"></i> Tambah Lokasi
-                </a>
-            </div>
-        </div>
-    </aside>
-
     <div class="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo-icon">
+                    <i class="fas fa-cloud-sun"></i>
+                </div>
+                <div>
+                    <div class="sidebar-logo-text">WeatherAI</div>
+                </div>
+            </div>
+
+            <div class="sidebar-content-wrapper">
+                <nav class="sidebar-nav">
+                    <a href="/" class="nav-item {active_home}" data-page="home">
+                        <i class="fas fa-home"></i>
+                        <span>Beranda</span>
+                    </a>
+                    <a href="/main" class="nav-item {active_ml}" data-page="ml">
+                        <i class="fas fa-brain"></i>
+                        <span>Main</span>
+                    </a>
+                    <a href="/ulasan" class="nav-item {active_ulasan}" data-page="ulasan">
+                        <i class="fas fa-edit"></i>
+                        <span>Tulis Ulasan</span>
+                    </a>
+                    <a href="/about" class="nav-item {active_about}" data-page="about">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Tentang</span>
+                    </a>
+                </nav>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">
+                        <i class="fas fa-star"></i> Lokasi Tersimpan
+                    </div>
+                    <div class="sidebar-locations">
+                        {sidebar_locations_html}
+                    </div>
+                    <a href="/search" style="display: block; margin-top: 20px; text-align: center; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600;">
+                        <i class="fas fa-plus-circle"></i> Tambah Lokasi
+                    </a>
+                </div>
+            </div>
+        </aside>
+
         <main class="main page-transition" id="mainContent">
             {message_html}
             {content}
@@ -2213,6 +2213,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function toggleSidebar() {{
+        // Hanya aktif di mobile
+        if (window.innerWidth > 768) return;
         var isOpen = document.body.classList.contains('sidebar-open');
         if (isOpen) {{
             closeSidebar();
@@ -2230,10 +2232,16 @@ def render_page(content: str, active: str = "home", message: str = None, message
         document.body.style.overflow = '';
     }}
 
-    // Klik pada area gelap (pseudoelement body::after) menutup sidebar
-    // Pseudoelement tidak bisa diberi event, jadi deteksi klik di body
-    // yang berada di LUAR sidebar
+    // Tutup sidebar saat resize ke desktop
+    window.addEventListener('resize', function() {{
+        if (window.innerWidth > 768) {{
+            closeSidebar();
+        }}
+    }});
+
+    // Tutup sidebar saat klik area gelap di luar sidebar (mobile only)
     document.body.addEventListener('click', function(e) {{
+        if (window.innerWidth > 768) return;
         if (!document.body.classList.contains('sidebar-open')) return;
         var sidebar = document.getElementById('sidebar');
         var menuBtn = document.getElementById('menuToggle');
@@ -2243,6 +2251,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }});
 
     document.body.addEventListener('touchend', function(e) {{
+        if (window.innerWidth > 768) return;
         if (!document.body.classList.contains('sidebar-open')) return;
         var sidebar = document.getElementById('sidebar');
         var menuBtn = document.getElementById('menuToggle');
