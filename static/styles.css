@@ -2394,3 +2394,204 @@ body.dark .notification-close {
         padding: 8px 12px;
     }
 }
+/* ============ BOTTOM NAVIGATION - MOBILE ============ */
+.bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 300;
+        background: var(--card-bg);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border-top: 1px solid var(--border-color);
+        padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+        justify-content: space-around;
+        align-items: center;
+        box-shadow: 0 -4px 24px rgba(0,0,0,0.10);
+    }
+
+    .bottom-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 6px 12px;
+        border-radius: 14px;
+        color: var(--text-tertiary);
+        text-decoration: none;
+        font-size: 10px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        min-width: 56px;
+    }
+
+    .bottom-nav-item i {
+        font-size: 20px;
+    }
+
+    .bottom-nav-item.active {
+        color: var(--accent);
+    }
+
+    .bottom-nav-item.active i {
+        transform: translateY(-2px);
+    }
+
+    .menu-toggle {
+        display: none !important;
+    }
+
+    .theme-toggle {
+        bottom: auto;
+        top: 16px;
+        right: 16px;
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+    }
+
+    .chat-toggle {
+        bottom: 76px;
+        right: 16px;
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+    }
+
+    .chat-bubble {
+        bottom: 136px;
+        right: 16px;
+        width: calc(100vw - 32px);
+        max-height: calc(100vh - 200px);
+    }
+
+    .hero-title {
+        font-size: 24px !important;
+    }
+
+    .hero-subtitle {
+        font-size: 13px !important;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .stat-card {
+        padding: 12px 10px !important;
+    }
+
+    .stat-icon {
+        font-size: 24px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .stat-value {
+        font-size: 15px !important;
+    }
+
+    .stat-label {
+        font-size: 9px !important;
+        letter-spacing: 0.8px !important;
+    }
+
+    .forecast-grid {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        gap: 10px !important;
+        padding-bottom: 8px !important;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .forecast-item {
+        flex: 0 0 auto !important;
+        width: 90px !important;
+        scroll-snap-align: start;
+        padding: 12px 8px !important;
+    }
+
+    .forecast-icon {
+        font-size: 24px !important;
+        margin: 8px 0 !important;
+    }
+
+    .glass-card {
+        padding: 16px !important;
+        border-radius: 22px !important;
+    }
+
+    .main {
+        padding: 16px 14px 90px !important;
+    }
+
+    .footer {
+        padding: 16px;
+        margin-top: 24px;
+    }
+
+    .bento-grid {
+        gap: 14px !important;
+    }
+
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 140;
+        backdrop-filter: blur(2px);
+    }
+
+    .sidebar-backdrop.active {
+        display: block;
+    }
+
+    .about-container {
+        padding: 0 !important;
+        gap: 14px !important;
+    }
+
+    .insights-text {
+        font-size: 14px !important;
+        line-height: 1.7 !important;
+    }
+
+    .search-container {
+        padding: 8px !important;
+        gap: 10px !important;
+    }
+}
+
+@media (max-width: 400px) {
+    .bottom-nav-item {
+        min-width: 44px;
+        padding: 6px 8px;
+        font-size: 9px;
+    }
+
+    .bottom-nav-item i {
+        font-size: 18px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .forecast-item {
+        width: 80px !important;
+    }
+
+    .hero-title {
+        font-size: 22px !important;
+    }
+}
