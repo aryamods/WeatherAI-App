@@ -135,10 +135,11 @@ body::before {
     flex-shrink: 0;
 }
 
-/* Daftar lokasi: scroll di sini saja */
+/* Daftar lokasi: scroll di sini saja, max-height agar tombol tidak terdorong jauh */
 .sidebar-locations {
-    flex: 1;
+    flex: 0 1 auto;
     min-height: 0;
+    max-height: calc(100% - 80px);
     overflow-y: auto;
     overflow-x: hidden;
     display: flex;
@@ -148,9 +149,10 @@ body::before {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Tombol tambah lokasi: tidak scroll, selalu terlihat */
+/* Tombol tambah lokasi: langsung di bawah list, tidak scroll */
 .sidebar-section > a[href="/search"] {
     flex-shrink: 0;
+    margin-top: 10px !important;
 }
 
 /* Scrollbar pada daftar lokasi */
@@ -2068,6 +2070,15 @@ body.dark .notification-close {
     .sidebar-section {
         margin-top: 28px;
         padding-top: 20px;
+    }
+
+    .sidebar-locations {
+        max-height: 35vh;
+    }
+
+    .sidebar-section > a[href="/search"] {
+        margin-top: 10px !important;
+        padding: 10px 0;
     }
 }
 
