@@ -2024,53 +2024,51 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <i class="fas fa-bars"></i>
     </button>
 
-    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo-icon">
+                <i class="fas fa-cloud-sun"></i>
+            </div>
+            <div>
+                <div class="sidebar-logo-text">WeatherAI</div>
+            </div>
+        </div>
+
+        <div class="sidebar-content-wrapper">
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item {active_home}" data-page="home">
+                    <i class="fas fa-home"></i>
+                    <span>Beranda</span>
+                </a>
+                <a href="/main" class="nav-item {active_ml}" data-page="ml">
+                    <i class="fas fa-brain"></i>
+                    <span>Main</span>
+                </a>
+                <a href="/ulasan" class="nav-item {active_ulasan}" data-page="ulasan">
+                    <i class="fas fa-edit"></i>
+                    <span>Tulis Ulasan</span>
+                </a>
+                <a href="/about" class="nav-item {active_about}" data-page="about">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Tentang</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">
+                    <i class="fas fa-star"></i> Lokasi Tersimpan
+                </div>
+                <div class="sidebar-locations">
+                    {sidebar_locations_html}
+                </div>
+                <a href="/search" style="display: block; margin-top: 20px; text-align: center; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600;">
+                    <i class="fas fa-plus-circle"></i> Tambah Lokasi
+                </a>
+            </div>
+        </div>
+    </aside>
 
     <div class="app">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-logo-icon">
-                    <i class="fas fa-cloud-sun"></i>
-                </div>
-                <div>
-                    <div class="sidebar-logo-text">WeatherAI</div>
-                </div>
-            </div>
-
-            <div class="sidebar-content-wrapper">
-                <nav class="sidebar-nav">
-                    <a href="/" class="nav-item {active_home}" data-page="home">
-                        <i class="fas fa-home"></i>
-                        <span>Beranda</span>
-                    </a>
-                    <a href="/main" class="nav-item {active_ml}" data-page="ml">
-                        <i class="fas fa-brain"></i>
-                        <span>Main</span>
-                    </a>
-                    <a href="/ulasan" class="nav-item {active_ulasan}" data-page="ulasan">
-                        <i class="fas fa-edit"></i>
-                        <span>Tulis Ulasan</span>
-                    </a>
-                    <a href="/about" class="nav-item {active_about}" data-page="about">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Tentang</span>
-                    </a>
-                </nav>
-
-                <div class="sidebar-section">
-                    <div class="sidebar-section-title">
-                        <i class="fas fa-star"></i> Lokasi Tersimpan
-                    </div>
-                    <div class="sidebar-locations">
-                        {sidebar_locations_html}
-                    </div>
-                    <a href="/search" style="display: block; margin-top: 20px; text-align: center; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600;">
-                        <i class="fas fa-plus-circle"></i> Tambah Lokasi
-                    </a>
-                </div>
-            </div>
-        </aside>
-
         <main class="main page-transition" id="mainContent">
             {message_html}
             {content}
@@ -2215,48 +2213,44 @@ def render_page(content: str, active: str = "home", message: str = None, message
     }}
 
     function toggleSidebar() {{
-        var sidebar = document.getElementById('sidebar');
-        var backdrop = document.getElementById('sidebarBackdrop');
-        if (!sidebar) return;
-        var isOpen = sidebar.classList.contains('open');
+        var isOpen = document.body.classList.contains('sidebar-open');
         if (isOpen) {{
-            sidebar.classList.remove('open');
-            if (backdrop) backdrop.classList.remove('active');
-            document.body.style.overflow = '';
+            closeSidebar();
         }} else {{
-            sidebar.classList.add('open');
-            if (backdrop) backdrop.classList.add('active');
+            document.body.classList.add('sidebar-open');
+            document.getElementById('sidebar').classList.add('open');
             document.body.style.overflow = 'hidden';
         }}
     }}
 
     function closeSidebar() {{
+        document.body.classList.remove('sidebar-open');
         var sidebar = document.getElementById('sidebar');
-        var backdrop = document.getElementById('sidebarBackdrop');
         if (sidebar) sidebar.classList.remove('open');
-        if (backdrop) backdrop.classList.remove('active');
         document.body.style.overflow = '';
     }}
 
-    // Tutup sidebar hanya saat klik di backdrop langsung
-    var sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    if (sidebarBackdrop) {{
-        sidebarBackdrop.addEventListener('click', function() {{
+    // Klik pada area gelap (pseudoelement body::after) menutup sidebar
+    // Pseudoelement tidak bisa diberi event, jadi deteksi klik di body
+    // yang berada di LUAR sidebar
+    document.body.addEventListener('click', function(e) {{
+        if (!document.body.classList.contains('sidebar-open')) return;
+        var sidebar = document.getElementById('sidebar');
+        var menuBtn = document.getElementById('menuToggle');
+        if (sidebar && !sidebar.contains(e.target) && menuBtn && !menuBtn.contains(e.target)) {{
             closeSidebar();
-        }});
-        sidebarBackdrop.addEventListener('touchend', function(e) {{
+        }}
+    }});
+
+    document.body.addEventListener('touchend', function(e) {{
+        if (!document.body.classList.contains('sidebar-open')) return;
+        var sidebar = document.getElementById('sidebar');
+        var menuBtn = document.getElementById('menuToggle');
+        if (sidebar && !sidebar.contains(e.target) && menuBtn && !menuBtn.contains(e.target)) {{
             e.preventDefault();
             closeSidebar();
-        }});
-    }}
-
-    // Cegah klik di dalam sidebar menutup sidebar
-    var sidebar = document.getElementById('sidebar');
-    if (sidebar) {{
-        sidebar.addEventListener('click', function(e) {{
-            e.stopPropagation();
-        }});
-    }}
+        }}
+    }}, {{ passive: false }});
 
     var fixedOffsetMap = {{
         'Asia/Jayapura': 'UTC+9', 'Asia/Tokyo': 'UTC+9', 'Asia/Seoul': 'UTC+9',
