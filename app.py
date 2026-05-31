@@ -2030,12 +2030,27 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     <div class="sidebar-logo-text">WeatherAI</div>
                 </div>
                 <label class="theme-switch-wrapper" for="themeSwitch" title="Ganti tema">
-                    <span class="theme-icon-light"><i class="fas fa-sun"></i></span>
                     <span class="theme-switch-track">
                         <input type="checkbox" id="themeSwitch" onchange="toggleTheme()">
-                        <span class="theme-switch-knob"></span>
+                        <span class="theme-switch-knob">
+                            <!-- Matahari (mode terang) -->
+                            <svg class="knob-sun" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="10" cy="10" r="4" fill="#f59e0b"/>
+                                <line x1="10" y1="1.5" x2="10" y2="3.5" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="10" y1="16.5" x2="10" y2="18.5" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="1.5" y1="10" x2="3.5" y2="10" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="16.5" y1="10" x2="18.5" y2="10" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="3.6" y1="3.6" x2="5" y2="5" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="15" y1="15" x2="16.4" y2="16.4" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="16.4" y1="3.6" x2="15" y2="5" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                                <line x1="5" y1="15" x2="3.6" y2="16.4" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
+                            <!-- Bulan sabit (mode gelap) -->
+                            <svg class="knob-moon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M15.5 11.5A7 7 0 0 1 8.5 4.5a7 7 0 0 0 0 11 7 7 0 0 0 9-3.5 7 7 0 0 1-2 -.5z" fill="#c4b5fd"/>
+                            </svg>
+                        </span>
                     </span>
-                    <span class="theme-icon-dark"><i class="fas fa-moon"></i></span>
                 </label>
             </div>
 
