@@ -93,17 +93,19 @@ body::before {
 }
 
 /* ============ SIDEBAR SCROLL FIX ============ */
+/* Satu titik scroll: sidebar itu sendiri */
 .sidebar {
     overflow-y: auto;
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
+    -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-content-wrapper {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    min-height: 0;
+    overflow: visible;
     padding-right: 4px;
 }
 
@@ -111,42 +113,27 @@ body::before {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: visible;
     padding-right: 6px;
 }
 
-/* Custom scrollbar untuk semua elemen yang bisa scroll */
-.sidebar::-webkit-scrollbar,
-.sidebar-content-wrapper::-webkit-scrollbar,
-.sidebar-locations::-webkit-scrollbar {
+/* Scrollbar hanya pada .sidebar */
+.sidebar::-webkit-scrollbar {
     width: 5px;
 }
 
-.sidebar::-webkit-scrollbar-track,
-.sidebar-content-wrapper::-webkit-scrollbar-track,
-.sidebar-locations::-webkit-scrollbar-track {
+.sidebar::-webkit-scrollbar-track {
     background: var(--bg-tertiary);
     border-radius: 10px;
 }
 
-.sidebar::-webkit-scrollbar-thumb,
-.sidebar-content-wrapper::-webkit-scrollbar-thumb,
-.sidebar-locations::-webkit-scrollbar-thumb {
+.sidebar::-webkit-scrollbar-thumb {
     background: var(--accent);
     border-radius: 10px;
 }
 
-.sidebar::-webkit-scrollbar-thumb:hover,
-.sidebar-content-wrapper::-webkit-scrollbar-thumb:hover,
-.sidebar-locations::-webkit-scrollbar-thumb:hover {
+.sidebar::-webkit-scrollbar-thumb:hover {
     background: var(--accent-hover);
-}
-
-/* Pastikan scroll bisa di-drag dengan mouse */
-.sidebar-locations {
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
 }
 
 .greeting-icon {
@@ -896,6 +883,8 @@ body.dark .notification-close {
     position: sticky;
     top: 0;
     height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
     transition: var(--transition);
     z-index: 100;
     border-radius: 0 24px 24px 0;
