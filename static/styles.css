@@ -885,8 +885,6 @@ body.dark .notification-close {
 .app {
     display: flex;
     min-height: 100vh;
-    position: relative;
-    z-index: 1;
 }
 
 .sidebar {
@@ -1919,8 +1917,8 @@ body.dark .notification-close {
     .sidebar {
         position: fixed;
         left: -100%;
-        width: min(320px, 100%);
-        max-width: 320px;
+        top: 0;
+        width: min(320px, 85%);
         z-index: 160;
         transition: left 0.3s ease;
         border-radius: 0 32px 32px 0;
@@ -2565,17 +2563,13 @@ body.dark .notification-close {
         gap: 14px !important;
     }
 
-    .sidebar-backdrop {
-        display: none;
+    body.sidebar-open::after {
+        content: '';
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,0.5);
-        z-index: 140;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .sidebar-backdrop.active {
-        display: block;
+        z-index: 155;
+        pointer-events: auto;
     }
 
     .about-container {
