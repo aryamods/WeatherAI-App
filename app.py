@@ -2024,30 +2024,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <i class="fas fa-bars"></i>
     </button>
 
-    <!-- Bottom Navigation - Mobile Only -->
-    <nav class="bottom-nav" id="bottomNav">
-        <a href="/" class="bottom-nav-item {active_home}" data-page="home">
-            <i class="fas fa-home"></i>
-            <span>Beranda</span>
-        </a>
-        <a href="/main" class="bottom-nav-item {active_ml}" data-page="ml">
-            <i class="fas fa-brain"></i>
-            <span>Main</span>
-        </a>
-        <a href="/ulasan" class="bottom-nav-item {active_ulasan}" data-page="ulasan">
-            <i class="fas fa-edit"></i>
-            <span>Ulasan</span>
-        </a>
-        <a href="/about" class="bottom-nav-item {active_about}" data-page="about">
-            <i class="fas fa-info-circle"></i>
-            <span>Tentang</span>
-        </a>
-        <button class="bottom-nav-item bottom-nav-menu" onclick="toggleSidebar()" aria-label="Menu">
-            <i class="fas fa-bars"></i>
-            <span>Menu</span>
-        </button>
-    </nav>
-
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
     <div class="app">
