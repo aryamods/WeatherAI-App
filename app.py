@@ -2016,10 +2016,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <div class="aura-glow"></div>
     </div>
 
-    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">
-        <i class="fas fa-moon" id="themeIcon"></i>
-    </button>
-
     <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()" aria-label="Menu">
         <i class="fas fa-bars"></i>
     </button>
@@ -2030,8 +2026,16 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 <div class="sidebar-logo-icon">
                     <i class="fas fa-cloud-sun"></i>
                 </div>
-                <div>
-                    <div class="sidebar-logo-text">WeatherAI</div>
+                <div class="sidebar-logo-text">WeatherAI</div>
+                <div class="theme-switch-wrapper" title="Ganti tema">
+                    <span class="theme-switch-icon theme-icon-light"><i class="fas fa-sun"></i></span>
+                    <label class="theme-switch" for="themeSwitch">
+                        <input type="checkbox" id="themeSwitch" onchange="toggleTheme()">
+                        <span class="theme-switch-slider">
+                            <span class="theme-switch-knob"></span>
+                        </span>
+                    </label>
+                    <span class="theme-switch-icon theme-icon-dark"><i class="fas fa-moon"></i></span>
                 </div>
             </div>
 
@@ -2181,35 +2185,26 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     function toggleTheme() {{
         var body = document.body;
-        var icon = document.getElementById('themeIcon');
+        var sw = document.getElementById('themeSwitch');
 
         if (body.classList.contains('dark')) {{
             body.classList.remove('dark');
-            if (icon) {{
-                icon.classList.remove('fa-sun');
-                icon.classList.add('fa-moon');
-            }}
+            if (sw) sw.checked = false;
             localStorage.setItem('theme', 'light');
         }} else {{
             body.classList.add('dark');
-            if (icon) {{
-                icon.classList.remove('fa-moon');
-                icon.classList.add('fa-sun');
-            }}
+            if (sw) sw.checked = true;
             localStorage.setItem('theme', 'dark');
         }}
         updateWhatsAppTheme();
     }}
 
     var savedTheme = localStorage.getItem('theme');
-    var themeIcon = document.getElementById('themeIcon');
+    var themeSwitch = document.getElementById('themeSwitch');
 
     if (savedTheme === 'dark') {{
         document.body.classList.add('dark');
-        if (themeIcon) {{
-            themeIcon.classList.remove('fa-moon');
-            themeIcon.classList.add('fa-sun');
-        }}
+        if (themeSwitch) themeSwitch.checked = true;
     }}
 
     function toggleSidebar() {{
