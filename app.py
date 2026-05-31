@@ -2023,20 +2023,20 @@ def render_page(content: str, active: str = "home", message: str = None, message
     <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo-icon">
-                    <i class="fas fa-cloud-sun"></i>
+                <div class="sidebar-logo-group">
+                    <div class="sidebar-logo-icon">
+                        <i class="fas fa-cloud-sun"></i>
+                    </div>
+                    <div class="sidebar-logo-text">WeatherAI</div>
                 </div>
-                <div class="sidebar-logo-text">WeatherAI</div>
-                <div class="theme-switch-wrapper" title="Ganti tema">
-                    <span class="theme-switch-icon theme-icon-light"><i class="fas fa-sun"></i></span>
-                    <label class="theme-switch" for="themeSwitch">
+                <label class="theme-switch-wrapper" for="themeSwitch" title="Ganti tema">
+                    <span class="theme-icon-light"><i class="fas fa-sun"></i></span>
+                    <span class="theme-switch-track">
                         <input type="checkbox" id="themeSwitch" onchange="toggleTheme()">
-                        <span class="theme-switch-slider">
-                            <span class="theme-switch-knob"></span>
-                        </span>
-                    </label>
-                    <span class="theme-switch-icon theme-icon-dark"><i class="fas fa-moon"></i></span>
-                </div>
+                        <span class="theme-switch-knob"></span>
+                    </span>
+                    <span class="theme-icon-dark"><i class="fas fa-moon"></i></span>
+                </label>
             </div>
 
             <div class="sidebar-content-wrapper">
