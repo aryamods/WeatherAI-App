@@ -2016,9 +2016,12 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <div class="aura-glow"></div>
     </div>
 
-    <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()" aria-label="Menu">
-        <i class="fas fa-bars"></i>
-    </button>
+    <div class="nav-tab" id="navTab" onclick="toggleSidebar()" role="button" aria-label="Buka menu navigasi">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white"
+             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+        </svg>
+    </div>
 
     <div class="app">
         <aside class="sidebar" id="sidebar">
@@ -2222,8 +2225,24 @@ def render_page(content: str, active: str = "home", message: str = None, message
         if (themeSwitch) themeSwitch.checked = true;
     }}
 
+    var _sidebarW = 0;
+
+    function _getTabEl() {{ return document.getElementById('navTab'); }}
+
+    function _updateTab(open) {{
+        var tab = _getTabEl();
+        if (!tab) return;
+        if (open) {{
+            _sidebarW = Math.min(Math.round(window.innerWidth * 0.6), 280);
+            tab.style.left = _sidebarW + 'px';
+            tab.classList.add('open');
+        }} else {{
+            tab.style.left = '0px';
+            tab.classList.remove('open');
+        }}
+    }}
+
     function toggleSidebar() {{
-        // Hanya aktif di mobile
         if (window.innerWidth > 768) return;
         var isOpen = document.body.classList.contains('sidebar-open');
         if (isOpen) {{
@@ -2232,6 +2251,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             document.body.classList.add('sidebar-open');
             document.getElementById('sidebar').classList.add('open');
             document.body.style.overflow = 'hidden';
+            _updateTab(true);
         }}
     }}
 
@@ -2240,22 +2260,19 @@ def render_page(content: str, active: str = "home", message: str = None, message
         var sidebar = document.getElementById('sidebar');
         if (sidebar) sidebar.classList.remove('open');
         document.body.style.overflow = '';
+        _updateTab(false);
     }}
 
-    // Tutup sidebar saat resize ke desktop
     window.addEventListener('resize', function() {{
-        if (window.innerWidth > 768) {{
-            closeSidebar();
-        }}
+        if (window.innerWidth > 768) {{ closeSidebar(); }}
     }});
 
-    // Tutup sidebar saat klik area gelap di luar sidebar (mobile only)
     document.body.addEventListener('click', function(e) {{
         if (window.innerWidth > 768) return;
         if (!document.body.classList.contains('sidebar-open')) return;
         var sidebar = document.getElementById('sidebar');
-        var menuBtn = document.getElementById('menuToggle');
-        if (sidebar && !sidebar.contains(e.target) && menuBtn && !menuBtn.contains(e.target)) {{
+        var tab = _getTabEl();
+        if (sidebar && !sidebar.contains(e.target) && tab && !tab.contains(e.target)) {{
             closeSidebar();
         }}
     }});
@@ -2264,8 +2281,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
         if (window.innerWidth > 768) return;
         if (!document.body.classList.contains('sidebar-open')) return;
         var sidebar = document.getElementById('sidebar');
-        var menuBtn = document.getElementById('menuToggle');
-        if (sidebar && !sidebar.contains(e.target) && menuBtn && !menuBtn.contains(e.target)) {{
+        var tab = _getTabEl();
+        if (sidebar && !sidebar.contains(e.target) && tab && !tab.contains(e.target)) {{
             e.preventDefault();
             closeSidebar();
         }}
