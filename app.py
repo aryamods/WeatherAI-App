@@ -2067,8 +2067,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
     <!-- Chat AI Ashley Button & Bubble -->
     <button class="chat-toggle" id="chatToggle" onclick="toggleChat()" aria-label="Chat AI Ashley">
         <div class="chat-toggle-dot"></div>
-        <span class="chat-toggle-text">Tanya Ashley</span>
-        <i class="fas fa-chevron-up chat-toggle-chevron"></i>
+        <span class="chat-toggle-text">Ask Ashley</span>
     </button>
 
     <div class="chat-bubble" id="chatBubble">
