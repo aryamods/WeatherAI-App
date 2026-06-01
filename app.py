@@ -1601,7 +1601,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         /* Chat Bubble */
         .chat-bubble {{
             position: fixed;
-            bottom: 100px;
+            bottom: 88px;
             right: 28px;
             width: 380px;
             max-width: calc(100vw - 56px);
@@ -1614,17 +1614,16 @@ def render_page(content: str, active: str = "home", message: str = None, message
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            transform: scale(0);
+            transform: translateX(calc(100% + 40px));
             opacity: 0;
-            transform-origin: bottom right;
-            transition: transform 0.3s ease, opacity 0.3s ease;
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
             visibility: hidden;
         }}
         body.dark .chat-bubble {{
             background: #1e293b;
         }}
         .chat-bubble.open {{
-            transform: scale(1);
+            transform: translateX(0);
             opacity: 1;
             visibility: visible;
         }}
@@ -1842,22 +1841,30 @@ def render_page(content: str, active: str = "home", message: str = None, message
                 font-size: 13px;
             }}
             .chat-bubble {{
-                width: calc(100vw - 40px);
-                right: 20px;
-                bottom: 136px;
-                max-height: calc(100vh - 160px);
-            }}
-        }}
-        
-        @media (max-width: 480px) {{
-            .chat-bubble {{
                 width: calc(100vw - 32px);
                 right: 16px;
-                bottom: 76px;
+                bottom: 136px;
+                height: calc(100dvh - 160px);
+                max-height: calc(100dvh - 160px);
                 border-radius: 24px;
             }}
+        }}
+
+        @media (max-width: 480px) {{
+            .chat-toggle {{
+                bottom: 76px;
+                right: 12px;
+            }}
+            .chat-bubble {{
+                width: calc(100vw - 24px);
+                right: 12px;
+                bottom: 130px;
+                height: calc(100dvh - 150px);
+                max-height: calc(100dvh - 150px);
+                border-radius: 20px;
+            }}
             .chat-header {{
-                padding: 12px 16px;
+                padding: 12px 14px;
             }}
             .chat-message {{
                 max-width: 90%;
