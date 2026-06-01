@@ -2234,11 +2234,8 @@ def render_page(content: str, active: str = "home", message: str = None, message
         var tab = _getTabEl();
         if (!tab) return;
         if (open) {{
-            _sidebarW = Math.min(Math.round(window.innerWidth * 0.6), 280);
-            tab.style.left = _sidebarW + 'px';
             tab.classList.add('open');
         }} else {{
-            tab.style.left = '0px';
             tab.classList.remove('open');
         }}
     }}
