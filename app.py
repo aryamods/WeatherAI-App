@@ -1538,28 +1538,64 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
         /* ============ CHATBOT CSS INLINE ============ */
         
-        /* Chat Toggle Button */
+        /* Chat Toggle Button — Pill */
         .chat-toggle {{
             position: fixed;
             bottom: 28px;
-            right: 100px;
-            width: 52px;
-            height: 52px;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #a855f7);
-            border-radius: 50%;
+            right: 28px;
+            height: 48px;
+            padding: 0 20px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 99px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 10px;
             cursor: pointer;
             z-index: 200;
             transition: all 0.3s ease;
-            color: white;
-            font-size: 24px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-            border: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }}
+        body.dark .chat-toggle {{
+            background: #1e293b;
+            border-color: #334155;
         }}
         .chat-toggle:hover {{
-            transform: scale(1.1);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+        }}
+        .chat-toggle-dot {{
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+            flex-shrink: 0;
+            animation: chatDotBlink 2.5s ease infinite;
+        }}
+        @keyframes chatDotBlink {{
+            0%, 100% {{ opacity: 1; }}
+            50%       {{ opacity: 0.35; }}
+        }}
+        .chat-toggle-text {{
+            font-size: 14px;
+            font-weight: 600;
+            color: #0f172a;
+            white-space: nowrap;
+        }}
+        body.dark .chat-toggle-text {{
+            color: #f1f5f9;
+        }}
+        .chat-toggle-chevron {{
+            font-size: 13px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            transition: transform 0.3s ease;
+        }}
+        .chat-toggle.open .chat-toggle-chevron {{
+            transform: rotate(180deg);
         }}
 
         /* Chat Bubble */
@@ -1593,53 +1629,95 @@ def render_page(content: str, active: str = "home", message: str = None, message
             visibility: visible;
         }}
 
-        /* Chat Header */
+        /* Chat Header — Accent Bar */
         .chat-header {{
-            padding: 16px 20px;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #a855f7);
+            padding: 14px 18px;
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
             display: flex;
             align-items: center;
             gap: 12px;
-            color: white;
             flex-shrink: 0;
         }}
+        body.dark .chat-header {{
+            background: #1e293b;
+            border-bottom-color: #334155;
+        }}
+        .chat-header-bar {{
+            width: 4px;
+            height: 28px;
+            border-radius: 99px;
+            overflow: hidden;
+            position: relative;
+            flex-shrink: 0;
+        }}
+        .chat-header-bar::after {{
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 400%;
+            background: repeating-linear-gradient(
+                to bottom,
+                #3b82f6 0%,
+                #6366f1 16.6%,
+                #a855f7 33.3%,
+                #ec4899 50%,
+                #a855f7 66.6%,
+                #6366f1 83.3%,
+                #3b82f6 100%
+            );
+            animation: chatBarFlow 2.5s linear infinite;
+        }}
+        @keyframes chatBarFlow {{
+            0%   {{ transform: translateY(-75%); }}
+            100% {{ transform: translateY(0%); }}
+        }}
         .chat-header-icon {{
-            width: 36px;
-            height: 36px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
+            display: none;
         }}
         .chat-header-info {{
             flex: 1;
         }}
         .chat-header-info h4 {{
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
             margin: 0;
+            color: #0f172a;
+        }}
+        body.dark .chat-header-info h4 {{
+            color: #f1f5f9;
         }}
         .chat-header-info p {{
             font-size: 11px;
-            opacity: 0.8;
+            color: #10b981;
             margin: 2px 0 0;
         }}
         .chat-close {{
-            width: 30px;
-            height: 30px;
-            background: rgba(255,255,255,0.15);
+            width: 28px;
+            height: 28px;
+            background: #f1f5f9;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: all 0.2s ease;
+            color: #64748b;
+            font-size: 13px;
+        }}
+        body.dark .chat-close {{
+            background: #334155;
+            color: #94a3b8;
         }}
         .chat-close:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e2e8f0;
+            color: #0f172a;
             transform: rotate(90deg);
+        }}
+        body.dark .chat-close:hover {{
+            background: #475569;
+            color: #f1f5f9;
         }}
 
         /* Chat Messages */
@@ -1688,13 +1766,15 @@ def render_page(content: str, active: str = "home", message: str = None, message
             word-wrap: break-word;
         }}
         .chat-message.bot .chat-bubble-text {{
-            background: #f1f5f9;
+            background: #ffffff;
             color: #0f172a;
             border-top-left-radius: 4px;
+            border: 1px solid #e2e8f0;
         }}
         body.dark .chat-message.bot .chat-bubble-text {{
-            background: #334155;
+            background: #1e293b;
             color: #f1f5f9;
+            border-color: #334155;
         }}
         .chat-message.user .chat-bubble-text {{
             background: #3b82f6;
@@ -1752,17 +1832,20 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
         @media (max-width: 768px) {{
             .chat-toggle {{
-                bottom: 20px;
-                right: 80px;
-                width: 44px;
+                bottom: 80px;
+                right: 16px;
                 height: 44px;
-                font-size: 20px;
+                padding: 0 16px;
+                gap: 8px;
+            }}
+            .chat-toggle-text {{
+                font-size: 13px;
             }}
             .chat-bubble {{
                 width: calc(100vw - 40px);
                 right: 20px;
-                bottom: 80px;
-                max-height: calc(100vh - 100px);
+                bottom: 136px;
+                max-height: calc(100vh - 160px);
             }}
         }}
         
@@ -1976,16 +2059,19 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     <!-- Chat AI Ashley Button & Bubble -->
     <button class="chat-toggle" id="chatToggle" onclick="toggleChat()" aria-label="Chat AI Ashley">
-        <i class="fas fa-comment-dots"></i>
+        <div class="chat-toggle-dot"></div>
+        <span class="chat-toggle-text">Tanya Ashley</span>
+        <i class="fas fa-chevron-up chat-toggle-chevron"></i>
     </button>
 
     <div class="chat-bubble" id="chatBubble">
         <div class="chat-header">
+            <div class="chat-header-bar"></div>
             <div class="chat-header-info">
                 <h4>Ashley</h4>
-                <p>Asisten Cuaca Cerdas</p>
+                <p>● Online sekarang</p>
             </div>
-            <button onclick="clearChatHistory()" title="Hapus riwayat chat" style="background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:14px;padding:4px 8px;border-radius:8px;transition:color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-tertiary)'">
+            <button onclick="clearChatHistory()" title="Hapus riwayat chat" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;padding:4px 8px;border-radius:8px;transition:color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
                 <i class="fas fa-trash-alt"></i>
             </button>
             <div class="chat-close" onclick="toggleChat()">
@@ -2808,8 +2894,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
     function toggleChat() {{
         const bubble = document.getElementById('chatBubble');
+        const btn = document.getElementById('chatToggle');
         if (bubble) {{
             bubble.classList.toggle('open');
+            btn && btn.classList.toggle('open');
             if (bubble.classList.contains('open')) {{
                 document.getElementById('chatInput')?.focus();
             }}
