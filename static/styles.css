@@ -1564,7 +1564,6 @@ body.dark .nav-tab {
 }
 
 .nav-tab:hover {
-    width: 7px;
     box-shadow: 0 0 20px rgba(99, 102, 241, 0.55);
 }
 
