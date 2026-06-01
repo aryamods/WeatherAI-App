@@ -2017,10 +2017,11 @@ def render_page(content: str, active: str = "home", message: str = None, message
     </div>
 
     <div class="nav-tab" id="navTab" onclick="toggleSidebar()" role="button" aria-label="Buka menu navigasi">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white"
-             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 18 15 12 9 6"/>
-        </svg>
+        <div class="nav-tab-dots">
+            <span class="nav-tab-dot dot-blue"></span>
+            <span class="nav-tab-dot dot-indigo"></span>
+            <span class="nav-tab-dot dot-purple"></span>
+        </div>
     </div>
 
     <div class="app">
