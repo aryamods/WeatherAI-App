@@ -1515,24 +1515,27 @@ body.dark .notification-close {
     display: none;
     position: fixed;
     top: 50%;
-    left: 0;
+    left: 8px;
     transform: translateY(-50%);
     width: 18px;
     height: 72px;
-    background: rgba(30, 34, 48, 0.82);
+    background: rgba(240, 244, 248, 0.88);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-radius: 0 14px 14px 0;
+    border-radius: 14px;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 200;
-    box-shadow: 3px 0 18px rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-left: none;
-    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-                width 0.2s ease,
-                box-shadow 0.2s ease;
+    z-index: 300;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.06);
+    transition: width 0.2s ease,
+                box-shadow 0.2s ease,
+                left 0.3s ease;
+}
+
+body.dark .nav-tab {
+    background: rgba(17, 24, 39, 0.88);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.06);
 }
 
 .nav-tab-dots {
@@ -1551,13 +1554,21 @@ body.dark .notification-close {
     transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
-.dot-blue   { background: #3b82f6; box-shadow: 0 0 5px rgba(59,130,246,0.7); }
-.dot-indigo { background: #6366f1; box-shadow: 0 0 5px rgba(99,102,241,0.7); }
-.dot-purple { background: #a855f7; box-shadow: 0 0 5px rgba(168,85,247,0.7); }
+.dot-blue   { background: #3b82f6; box-shadow: 0 0 5px rgba(59,130,246,0.6); }
+.dot-indigo { background: #6366f1; box-shadow: 0 0 5px rgba(99,102,241,0.6); }
+.dot-purple { background: #a855f7; box-shadow: 0 0 5px rgba(168,85,247,0.6); }
+
+body.dark .dot-blue   { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.85); }
+body.dark .dot-indigo { background: #818cf8; box-shadow: 0 0 6px rgba(129,140,248,0.85); }
+body.dark .dot-purple { background: #c084fc; box-shadow: 0 0 6px rgba(192,132,252,0.85); }
 
 .nav-tab:hover {
     width: 24px;
-    box-shadow: 4px 0 24px rgba(99, 102, 241, 0.5);
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.25);
+}
+
+body.dark .nav-tab:hover {
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.6);
 }
 
 .nav-tab:hover .nav-tab-dot {
@@ -2794,6 +2805,7 @@ body.dark .notification-close {
     .nav-tab {
         width: 18px;
         height: clamp(60px, 16vw, 80px);
+        left: 8px;
     }
 
     .nav-tab-dot {
@@ -2954,6 +2966,19 @@ body.dark .notification-close {
         background: rgba(0,0,0,0.5);
         z-index: 155;
         pointer-events: auto;
+    }
+
+    /* --- NAV-TAB IKUT BERGESER SAAT SIDEBAR BUKA --- */
+    body.sidebar-open .nav-tab {
+        left: calc(60% + 8px);
+        transition: left 0.3s ease;
+    }
+}
+
+/* --- Ponsel sangat kecil (< 360px): nav-tab ikut sidebar 75% --- */
+@media (max-width: 359px) {
+    body.sidebar-open .nav-tab {
+        left: calc(75% + 8px);
     }
 }
 
