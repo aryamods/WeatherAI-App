@@ -2412,11 +2412,14 @@ body.dark .nav-tab:hover {
 /* Responsive chat untuk mobile */
 @media (max-width: 768px) {
     .chat-toggle {
-        bottom: 80px;
+        /* Di atas bottom-nav (±64px) + sedikit jarak */
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 12px);
         right: 16px;
         height: 44px;
         padding: 0 16px;
         gap: 8px;
+        /* Pastikan tombol tidak terpotong */
+        z-index: 301;
     }
 
     .chat-toggle-text {
@@ -2424,11 +2427,15 @@ body.dark .nav-tab:hover {
     }
     
     .chat-bubble {
-        width: calc(100vw - 40px);
-        right: 20px;
-        bottom: 136px;
-        height: 500px;
-        max-height: calc(100vh - 160px);
+        width: calc(100vw - 32px);
+        right: 16px;
+        /* Mulai dari atas tombol chat-toggle */
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
+        height: auto;
+        max-height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
+        border-radius: 24px;
+        /* transform-origin menyesuaikan karena tombol ada di kanan bawah */
+        transform-origin: bottom right;
     }
 }
 
@@ -2436,8 +2443,10 @@ body.dark .nav-tab:hover {
     .chat-bubble {
         width: calc(100vw - 32px);
         right: 16px;
-        bottom: 76px;
-        border-radius: 24px;
+        /* Sama — konsisten dengan 768px */
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
+        max-height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
+        border-radius: 22px;
     }
     
     .chat-header {
@@ -2501,11 +2510,7 @@ body.dark .nav-tab:hover {
         color: var(--accent);
     }
 
-    /* Posisi chat toggle di mobile — di atas bottom-nav */
-    .chat-toggle {
-        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px);
-        right: 16px;
-    }
+    /* Posisi chat toggle di mobile — diatur di fluid section bawah */
 }
 
 /* ============================================================
@@ -2863,13 +2868,24 @@ body.dark .nav-tab:hover {
         left: 8px;
     }
 
+    /* --- CHAT TOGGLE (tombol "Ask Ashley") --- */
+    /* Posisi: di atas bottom-nav + sedikit jarak, pojok kanan bawah */
+    .chat-toggle {
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 12px) !important;
+        right: 16px !important;
+        z-index: 301;
+    }
+
     /* --- CHAT BUBBLE --- */
+    /* Tumbuh ke atas dari tombol chat-toggle */
     .chat-bubble {
-        width: calc(100vw - clamp(24px, 6vw, 40px));
-        right: clamp(12px, 3vw, 20px);
-        bottom: clamp(70px, 18vw, 90px);
-        max-height: calc(100dvh - 120px);
+        width: calc(100vw - 32px);
+        right: 16px;
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
+        height: auto;
+        max-height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
         border-radius: clamp(20px, 5vw, 28px);
+        transform-origin: bottom right;
     }
 
     .chat-header {
