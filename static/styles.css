@@ -1508,31 +1508,45 @@ body.dark .notification-close {
 }
 
 
-.menu-toggle {
-    position: fixed;
-    bottom: 28px;
-    left: 28px;
-    width: 52px;
-    height: 52px;
-    background: var(--card-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    border-radius: 50%;
+/* ============ NAV TAB — drawer puller ============ */
+.menu-toggle { display: none !important; }
+
+.nav-tab {
     display: none;
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 56px;
+    background: linear-gradient(180deg, #3b82f6, #6366f1);
+    border-radius: 0 12px 12px 0;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 200;
-    transition: var(--transition);
-    color: var(--text-primary);
-    font-size: 22px;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 4px 0 16px rgba(99, 102, 241, 0.45);
+    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.2s ease,
+                box-shadow 0.2s ease;
 }
 
-.menu-toggle:hover {
-    transform: scale(1.1);
-    background: var(--accent-gradient);
-    color: white;
+.nav-tab svg {
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.nav-tab.open svg {
+    transform: rotate(180deg);
+}
+
+.nav-tab:hover {
+    width: 28px;
+    box-shadow: 4px 0 24px rgba(99, 102, 241, 0.65);
+}
+
+.nav-tab:active {
+    width: 20px;
 }
 
 .footer {
@@ -2001,7 +2015,7 @@ body.dark .notification-close {
         flex-direction: column;
     }
 
-    .menu-toggle {
+    .nav-tab {
         display: flex;
     }
 
@@ -2397,13 +2411,7 @@ body.dark .notification-close {
         color: var(--accent);
     }
 
-    /* Posisi floating buttons di mobile */
-    .menu-toggle {
-        display: flex !important;
-        bottom: 20px;
-        left: 20px;
-        top: auto;
-    }
+    /* Posisi chat toggle di mobile */
 
     .chat-toggle {
         bottom: 20px;
@@ -2760,11 +2768,9 @@ body.dark .notification-close {
     }
 
     /* --- FLOATING BUTTONS --- */
-    .menu-toggle,
-    .chat-toggle {
-        width: var(--touch-min);
-        height: var(--touch-min);
-        font-size: clamp(16px, 5vw, 22px);
+    .nav-tab {
+        width: 22px;
+        height: clamp(48px, 12vw, 60px);
     }
 
     /* --- CHAT BUBBLE --- */
