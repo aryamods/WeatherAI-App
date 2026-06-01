@@ -2501,9 +2501,9 @@ body.dark .nav-tab:hover {
         color: var(--accent);
     }
 
-    /* Posisi chat toggle di mobile */
+    /* Posisi chat toggle di mobile — di atas bottom-nav */
     .chat-toggle {
-        bottom: 80px;
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px);
         right: 16px;
     }
 }
