@@ -1533,25 +1533,26 @@ body.dark .notification-close {
 .nav-tab::after {
     content: '';
     position: absolute;
-    top: -100%;
+    top: 0;
     left: 0;
     width: 100%;
-    height: 300%;
-    background: linear-gradient(
+    height: 400%;
+    background: repeating-linear-gradient(
         to bottom,
-        #3b82f6,
-        #6366f1,
-        #a855f7,
-        #c084fc,
-        #6366f1,
-        #3b82f6
+        #3b82f6 0%,
+        #6366f1 16.6%,
+        #a855f7 33.3%,
+        #ec4899 50%,
+        #a855f7 66.6%,
+        #6366f1 83.3%,
+        #3b82f6 100%
     );
-    animation: navTabFlow 2s linear infinite;
+    animation: navTabFlow 2.5s linear infinite;
 }
 
 @keyframes navTabFlow {
-    0%   { transform: translateY(0%); }
-    100% { transform: translateY(50%); }
+    0%   { transform: translateY(-75%); }
+    100% { transform: translateY(0%); }
 }
 
 /* Hapus elemen dot lama (jaga-jaga jika masih ada di HTML) */
