@@ -1830,41 +1830,40 @@ def render_page(content: str, active: str = "home", message: str = None, message
         }}
 
         @media (max-width: 768px) {{
-            /* Tombol tepat di atas bottom-nav (tinggi ~64px) + margin 10px */
             .chat-toggle {{
-                bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px);
+                /* Di atas bottom-nav (56px) + safe-area + 12px jarak */
+                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px);
                 right: 16px;
                 height: 44px;
                 padding: 0 16px;
                 gap: 8px;
-                z-index: 290;
+                z-index: 301;
             }}
             .chat-toggle-text {{
                 font-size: 13px;
             }}
-            /* Bubble mulai dari atas tombol + 8px gap */
             .chat-bubble {{
                 width: calc(100vw - 32px);
                 right: 16px;
-                bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px + 44px + 8px);
-                height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 10px - 44px - 8px - 16px);
-                max-height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 10px - 44px - 8px - 16px);
+                /* Tepat di atas tombol chat-toggle */
+                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
+                height: auto;
+                max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
                 border-radius: 24px;
-                z-index: 289;
             }}
         }}
 
         @media (max-width: 480px) {{
             .chat-toggle {{
-                bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px);
+                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px);
                 right: 12px;
             }}
             .chat-bubble {{
                 width: calc(100vw - 24px);
                 right: 12px;
-                bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px + 44px + 8px);
-                height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 10px - 44px - 8px - 16px);
-                max-height: calc(100dvh - 64px - max(8px, env(safe-area-inset-bottom)) - 10px - 44px - 8px - 16px);
+                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
+                height: auto;
+                max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
                 border-radius: 20px;
             }}
             .chat-header {{
