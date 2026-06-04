@@ -2,7 +2,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
 
 :root {
-    --chat-bottom-offset: 28px;
     --bg-primary: #f0f4f8;
     --bg-secondary: #ffffff;
     --bg-tertiary: #f8fafc;
@@ -726,11 +725,11 @@ body.dark .notification-title {
 }
 
 body:not(.dark) .notification-desc {
-    color: #475569;
+    color: var(--text-secondary);
 }
 
 body.dark .notification-desc {
-    color: #94a3b8;
+    color: var(--text-secondary);
 }
 
 .notification-badge {
@@ -767,11 +766,11 @@ body.dark .notification-desc {
 }
 
 body:not(.dark) .notification-close {
-    color: #64748b;
+    color: var(--text-tertiary);
 }
 
 body.dark .notification-close {
-    color: #94a3b8;
+    color: var(--text-tertiary);
 }
 
 .notification-close:hover {
@@ -1318,6 +1317,8 @@ body.dark .notification-close {
     line-height: 1.8;
     font-size: 15px;
     color: var(--text-primary);
+    text-align: justify;
+    text-justify: inter-word;
 }
 
 .info-row {
@@ -2087,7 +2088,7 @@ body.dark .nav-tab:hover {
 /* ============ AI CHAT ASHLEY - DESKTOP/LAPTOP ============ */
 .chat-toggle {
     position: fixed;
-    bottom: var(--chat-bottom-offset);
+    bottom: 28px;
     right: 28px;
     height: 48px;
     padding: 0 20px;
@@ -2412,33 +2413,24 @@ body.dark .nav-tab:hover {
 
 /* Responsive chat untuk mobile */
 @media (max-width: 768px) {
-    /* Set offset: tinggi bottom-nav (56px) + safe area + 12px jarak */
-    :root {
-        --chat-bottom-offset: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px);
-        --chat-bubble-bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
-    }
-
     .chat-toggle {
-        bottom: var(--chat-bottom-offset);
+        bottom: 80px;
         right: 16px;
         height: 44px;
         padding: 0 16px;
         gap: 8px;
-        z-index: 301;
     }
 
     .chat-toggle-text {
         font-size: 13px;
     }
-
+    
     .chat-bubble {
-        width: calc(100vw - 32px);
-        right: 16px;
-        bottom: var(--chat-bubble-bottom);
-        height: auto;
-        max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
-        border-radius: 24px;
-        transform-origin: bottom right;
+        width: calc(100vw - 40px);
+        right: 20px;
+        bottom: 136px;
+        height: 500px;
+        max-height: calc(100vh - 160px);
     }
 }
 
@@ -2446,23 +2438,22 @@ body.dark .nav-tab:hover {
     .chat-bubble {
         width: calc(100vw - 32px);
         right: 16px;
-        bottom: var(--chat-bubble-bottom);
-        max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
-        border-radius: 22px;
+        bottom: 76px;
+        border-radius: 24px;
     }
-
+    
     .chat-header {
         padding: 12px 16px;
     }
-
+    
     .chat-messages {
         padding: 12px;
     }
-
+    
     .chat-message {
         max-width: 90%;
     }
-
+    
     .chat-bubble-text {
         font-size: 12px;
         padding: 8px 12px;
@@ -2512,7 +2503,11 @@ body.dark .nav-tab:hover {
         color: var(--accent);
     }
 
-    /* Posisi chat toggle di mobile — diatur di fluid section bawah */
+    /* Posisi chat toggle di mobile — di atas bottom-nav */
+    .chat-toggle {
+        bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px);
+        right: 16px;
+    }
 }
 
 /* ============================================================
@@ -2870,24 +2865,13 @@ body.dark .nav-tab:hover {
         left: 8px;
     }
 
-    /* --- CHAT TOGGLE (tombol "Ask Ashley") --- */
-    /* Gunakan CSS variable --chat-bottom-offset yang sudah ditetapkan di atas */
-    .chat-toggle {
-        bottom: var(--chat-bottom-offset) !important;
-        right: 16px !important;
-        z-index: 301;
-    }
-
     /* --- CHAT BUBBLE --- */
-    /* Tumbuh ke atas dari tombol chat-toggle */
     .chat-bubble {
-        width: calc(100vw - 32px);
-        right: 16px;
-        bottom: var(--chat-bubble-bottom) !important;
-        height: auto;
-        max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px) !important;
+        width: calc(100vw - clamp(24px, 6vw, 40px));
+        right: clamp(12px, 3vw, 20px);
+        bottom: clamp(70px, 18vw, 90px);
+        max-height: calc(100dvh - 120px);
         border-radius: clamp(20px, 5vw, 28px);
-        transform-origin: bottom right;
     }
 
     .chat-header {
