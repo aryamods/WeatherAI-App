@@ -11,7 +11,8 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
+from sklearn.model_selection import cross_val_score, KFold
 import joblib
 import os
 import warnings
@@ -827,30 +828,83 @@ class WeatherPredictor:
         X = df[feature_cols]
         y = df["temperature"]
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-        print("🤖 Melatih model Random Forest Regressor...")
+        print("🤖 Melatih model Random Forest Regressor dengan 5-Fold Cross-Validation...")
         self.model = RandomForestRegressor(
             n_estimators=100, max_depth=15, min_samples_split=5,
             min_samples_leaf=2, random_state=42, n_jobs=-1
         )
-        self.model.fit(X_train, y_train)
 
-        y_pred = self.model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        fold_results = []
+        fold_idx = 1
+
+        for train_idx, test_idx in kf.split(X):
+            X_train_f, X_test_f = X.iloc[train_idx], X.iloc[test_idx]
+            y_train_f, y_test_f = y.iloc[train_idx], y.iloc[test_idx]
+
+            fold_model = RandomForestRegressor(
+                n_estimators=100, max_depth=15, min_samples_split=5,
+                min_samples_leaf=2, random_state=42, n_jobs=-1
+            )
+            fold_model.fit(X_train_f, y_train_f)
+            y_pred_f = fold_model.predict(X_test_f)
+
+            fold_mae  = float(mean_absolute_error(y_test_f, y_pred_f))
+            fold_rmse = float(np.sqrt(mean_squared_error(y_test_f, y_pred_f)))
+            fold_r2   = float(r2_score(y_test_f, y_pred_f))
+            nonzero   = y_test_f[y_test_f != 0]
+            fold_mape = float(np.mean(np.abs((nonzero - fold_model.predict(X_test_f.iloc[y_test_f.values != 0])) / nonzero)) * 100) if len(nonzero) > 0 else 0.0
+
+            fold_results.append({
+                "fold": fold_idx,
+                "train_size": len(train_idx),
+                "test_size":  len(test_idx),
+                "mae":  round(fold_mae,  4),
+                "rmse": round(fold_rmse, 4),
+                "r2":   round(fold_r2,   4),
+                "mape": round(fold_mape, 4),
+            })
+            print(f"   Fold {fold_idx}: MAE={fold_mae:.3f} RMSE={fold_rmse:.3f} R²={fold_r2:.4f}")
+            fold_idx += 1
+
+        # Latih final model dengan seluruh data
+        self.model.fit(X, y)
+
+        mae_avg  = round(float(np.mean([f["mae"]  for f in fold_results])), 6)
+        mae_std  = round(float(np.std( [f["mae"]  for f in fold_results])), 6)
+        r2_avg   = round(float(np.mean([f["r2"]   for f in fold_results])), 6)
+        r2_std   = round(float(np.std( [f["r2"]   for f in fold_results])), 6)
+        rmse_avg = round(float(np.mean([f["rmse"] for f in fold_results])), 6)
+        mape_avg = round(float(np.mean([f["mape"] for f in fold_results])), 4)
 
         print(f"✅ Model selesai dilatih!")
-        print(f"   📈 Mean Absolute Error: {mae:.2f}°C")
-        print(f"   📊 R² Score: {r2:.3f}")
+        print(f"   📈 MAE rata-rata (5-fold): {mae_avg:.4f}°C ± {mae_std:.4f}")
+        print(f"   📊 R² rata-rata (5-fold):  {r2_avg:.4f} ± {r2_std:.4f}")
+        print(f"   📐 RMSE rata-rata:          {rmse_avg:.4f}°C")
+        print(f"   📉 MAPE rata-rata:          {mape_avg:.2f}%")
 
         joblib.dump({
-            "model": self.model, "features": feature_cols, "feature_names": feature_cols,
-            "mae": mae, "r2": r2, "location": location_name,
+            "model": self.model,
+            "features": feature_cols,
+            "feature_names": feature_cols,
+            "mae": mae_avg, "mae_std": mae_std,
+            "r2":  r2_avg,  "r2_std":  r2_std,
+            "rmse": rmse_avg,
+            "mape": mape_avg,
+            "fold_results": fold_results,
+            "location": location_name,
+            "n_folds": 5,
         }, MODEL_PATH)
 
         self.features = feature_cols
-        return {"mae": round(mae, 6), "r2": round(r2, 6), "features": feature_cols}
+        return {
+            "mae": mae_avg, "mae_std": mae_std,
+            "r2":  r2_avg,  "r2_std":  r2_std,
+            "rmse": rmse_avg,
+            "mape": mape_avg,
+            "fold_results": fold_results,
+            "features": feature_cols,
+        }
 
     def load_model(self):
         if os.path.exists(MODEL_PATH):
@@ -909,9 +963,11 @@ class WeatherPredictor:
             hour_factor = 2 * np.sin(2 * np.pi * (hour - 14) / 24)
             final_temp = pred_temp + hour_factor
 
+            _hari_map = {"Mon": "Sen", "Tue": "Sel", "Wed": "Rab", "Thu": "Kam", "Fri": "Jum", "Sat": "Sab", "Sun": "Min"}
+            _d = datetime.now() + timedelta(days=i)
             predictions.append({
-                "day": (datetime.now() + timedelta(days=i)).strftime("%a"),
-                "date": (datetime.now() + timedelta(days=i)).strftime("%d/%m"),
+                "day": _hari_map.get(_d.strftime("%a"), _d.strftime("%a")),
+                "date": _d.strftime("%d/%m"),
                 "temp_max": round(final_temp + 2, 1),
                 "temp_min": round(final_temp - 2, 1),
                 "precipitation": round(max(0, np.random.exponential(0.5)), 1),
@@ -935,9 +991,11 @@ class WeatherPredictor:
             daily_var = 2 * np.sin(2 * np.pi * i / 6)
             pred_temp = current_temp + trend + daily_var
 
+            _hari_map = {"Mon": "Sen", "Tue": "Sel", "Wed": "Rab", "Thu": "Kam", "Fri": "Jum", "Sat": "Sab", "Sun": "Min"}
+            _d = datetime.now() + timedelta(days=i)
             predictions.append({
-                "day": (datetime.now() + timedelta(days=i)).strftime("%a"),
-                "date": (datetime.now() + timedelta(days=i)).strftime("%d/%m"),
+                "day": _hari_map.get(_d.strftime("%a"), _d.strftime("%a")),
+                "date": _d.strftime("%d/%m"),
                 "temp_max": round(pred_temp + 2, 1),
                 "temp_min": round(pred_temp - 2, 1),
                 "precipitation": round(max(0, np.random.exponential(0.5)), 1),
@@ -954,9 +1012,15 @@ class WeatherPredictor:
                 saved = joblib.load(MODEL_PATH)
                 return {
                     "is_trained": True,
-                    "mae": saved.get("mae", "N/A"),
-                    "r2": saved.get("r2", "N/A"),
-                    "location": saved.get("location", "Unknown"),
+                    "mae":          saved.get("mae",  "N/A"),
+                    "mae_std":      saved.get("mae_std", 0),
+                    "r2":           saved.get("r2",   "N/A"),
+                    "r2_std":       saved.get("r2_std", 0),
+                    "rmse":         saved.get("rmse", "N/A"),
+                    "mape":         saved.get("mape", "N/A"),
+                    "fold_results": saved.get("fold_results", []),
+                    "n_folds":      saved.get("n_folds", 1),
+                    "location":     saved.get("location", "Unknown"),
                 }
             except:
                 return {"is_trained": False}
@@ -1675,6 +1739,22 @@ def render_page(content: str, active: str = "home", message: str = None, message
         .chat-header-icon {{
             display: none;
         }}
+        /* Avatar di header */
+        .chat-header-avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }}
+        .chat-header-avatar .header-avatar-svg {{
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            transition: opacity 0.25s ease;
+        }}
+
         .chat-header-info {{
             flex: 1;
         }}
@@ -1750,7 +1830,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             flex-shrink: 0;
         }}
         .chat-message.bot .chat-avatar {{
-            background: linear-gradient(135deg, #8b5cf6, #a855f7);
+            background: transparent;
             color: white;
         }}
         .chat-message.user .chat-avatar {{
@@ -1781,38 +1861,42 @@ def render_page(content: str, active: str = "home", message: str = None, message
             border-top-right-radius: 4px;
         }}
 
-        /* Typing Indicator - efek kursor berkedip (natural typing) */
-        .chat-typing {{
+        /* Typing Indicator */
+
+        /* Kursor berkedip - default (tidak mengetik) */
+
+
+        /* Sound wave di avatar bubble chat - saat Ashley mengetik */
+        .sound-wave-avatar {{
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: transparent;
             display: flex;
             align-items: center;
-            gap: 4px;
-            padding: 10px 14px;
-            background: #f1f5f9;
-            border-radius: 18px;
-            border-top-left-radius: 4px;
-            width: fit-content;
-            font-family: monospace;
-            font-size: 13px;
-            color: #475569;
+            justify-content: center;
+            gap: 3px;
         }}
-        body.dark .chat-typing {{
-            background: #334155;
-            color: #cbd5e1;
+        body.dark .sound-wave-avatar {{
+            background: transparent;
         }}
-        .typing-cursor {{
-            display: inline-block;
-            width: 2px;
-            height: 16px;
-            background-color: #8b5cf6;
-            margin-left: 2px;
-            animation: blink 1s step-end infinite;
-            vertical-align: middle;
+        .sound-wave-avatar .sbar {{
+            width: 3px;
+            border-radius: 3px;
+            background: linear-gradient(180deg, #e879f9, #2dd4bf);
+            animation: sbarPulse 0.8s ease-in-out infinite;
+            transform-origin: center;
         }}
-        @keyframes blink {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0; }}
+        .sound-wave-avatar .sbar:nth-child(1) {{ height: 6px;  animation-delay: 0s; }}
+        .sound-wave-avatar .sbar:nth-child(2) {{ height: 13px; animation-delay: 0.15s; }}
+        .sound-wave-avatar .sbar:nth-child(3) {{ height: 18px; animation-delay: 0.3s; }}
+        .sound-wave-avatar .sbar:nth-child(4) {{ height: 13px; animation-delay: 0.45s; }}
+        .sound-wave-avatar .sbar:nth-child(5) {{ height: 6px;  animation-delay: 0.6s; }}
+        @keyframes sbarPulse {{
+            0%, 100% {{ transform: scaleY(0.3); opacity: 0.5; }}
+            50%       {{ transform: scaleY(1);   opacity: 1; }}
         }}
-        
+
         /* Chat Scrollbar */
         .chat-messages::-webkit-scrollbar {{
             width: 4px;
@@ -1831,13 +1915,11 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
         @media (max-width: 768px) {{
             .chat-toggle {{
-                /* Di atas bottom-nav (56px) + safe-area + 12px jarak */
-                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px);
+                bottom: max(16px, env(safe-area-inset-bottom));
                 right: 16px;
                 height: 44px;
                 padding: 0 16px;
                 gap: 8px;
-                z-index: 301;
             }}
             .chat-toggle-text {{
                 font-size: 13px;
@@ -1845,25 +1927,24 @@ def render_page(content: str, active: str = "home", message: str = None, message
             .chat-bubble {{
                 width: calc(100vw - 32px);
                 right: 16px;
-                /* Tepat di atas tombol chat-toggle */
-                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
-                height: auto;
-                max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
+                bottom: calc(max(16px, env(safe-area-inset-bottom)) + 44px + 10px);
+                height: 55vh;
+                max-height: 55vh;
                 border-radius: 24px;
             }}
         }}
 
         @media (max-width: 480px) {{
             .chat-toggle {{
-                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px);
+                bottom: max(14px, env(safe-area-inset-bottom));
                 right: 12px;
             }}
             .chat-bubble {{
                 width: calc(100vw - 24px);
                 right: 12px;
-                bottom: calc(56px + max(8px, env(safe-area-inset-bottom)) + 12px + 44px + 10px);
-                height: auto;
-                max-height: calc(100dvh - 56px - max(8px, env(safe-area-inset-bottom)) - 44px - 24px - 56px);
+                bottom: calc(max(14px, env(safe-area-inset-bottom)) + 44px + 10px);
+                height: 55vh;
+                max-height: 55vh;
                 border-radius: 20px;
             }}
             .chat-header {{
@@ -1874,6 +1955,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             }}
         }}
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
 <body>
     <div class="loader-wrapper" id="loaderWrapper">
@@ -2091,7 +2173,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         <div class="chat-messages" id="chatMessages">
             <div class="chat-message bot">
                 <div class="chat-avatar">
-                    <img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                    <svg width="100%" height="100%" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><defs><linearGradient id="tdg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient><style>@keyframes tdspin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}.tdring{{transform-origin:0 0;animation:tdspin 20s linear infinite}}</style></defs><g class="tdring"><circle cx="0" cy="-28" r="9" fill="#e879f9"/><circle cx="24.2" cy="14" r="9" fill="#2dd4bf"/><circle cx="-24.2" cy="14" r="9" fill="#a78bf6"/></g><circle cx="0" cy="0" r="7" fill="#e879f9" opacity="0.5"/></svg>
                 </div>
                 <div class="chat-bubble-text">
                     Halo! Saya Ashley 👋<br>Saya bisa membantu Anda dengan informasi cuaca, prakiraan, analisis, dan tips terkait cuaca. Ada yang bisa saya bantu?
@@ -2897,9 +2979,129 @@ def render_page(content: str, active: str = "home", message: str = None, message
         }});
     }}
 
+    // ============ CNN KAMERA LIVE ============
+    let cameraStream = null;
+    let autoDetectInterval = null;
+    let autoDetectActive = false;
+
+    function switchCNNTab(tab) {{
+        var panelUpload = document.getElementById('panel-upload');
+        var panelCamera = document.getElementById('panel-camera');
+        var tabUpload = document.getElementById('tab-upload');
+        var tabCamera = document.getElementById('tab-camera');
+
+        if (tab === 'upload') {{
+            if (panelUpload) panelUpload.style.display = 'block';
+            if (panelCamera) panelCamera.style.display = 'none';
+            if (tabUpload) {{ tabUpload.style.background = 'var(--accent)'; tabUpload.style.color = 'white'; }}
+            if (tabCamera) {{ tabCamera.style.background = 'transparent'; tabCamera.style.color = 'var(--text-secondary)'; }}
+            stopCamera();
+        }} else {{
+            if (panelUpload) panelUpload.style.display = 'none';
+            if (panelCamera) panelCamera.style.display = 'block';
+            if (tabCamera) {{ tabCamera.style.background = 'var(--accent)'; tabCamera.style.color = 'white'; }}
+            if (tabUpload) {{ tabUpload.style.background = 'transparent'; tabUpload.style.color = 'var(--text-secondary)'; }}
+        }}
+    }}
+
+    async function startCamera() {{
+        try {{
+            cameraStream = await navigator.mediaDevices.getUserMedia({{
+                video: {{ facingMode: 'environment', width: {{ ideal: 1280 }}, height: {{ ideal: 720 }} }},
+                audio: false
+            }});
+            var video = document.getElementById('cameraFeed');
+            if (video) {{
+                video.srcObject = cameraStream;
+                video.play();
+            }}
+            document.getElementById('startCameraBtn').style.display = 'none';
+            var captureBtn = document.getElementById('captureBtn');
+            var autoBtn = document.getElementById('autoDetectBtn');
+            var stopBtn = document.getElementById('stopCameraBtn');
+            var liveBadge = document.getElementById('liveBadge');
+            if (captureBtn) captureBtn.style.display = 'flex';
+            if (autoBtn) autoBtn.style.display = 'flex';
+            if (stopBtn) stopBtn.style.display = 'flex';
+            if (liveBadge) liveBadge.style.display = 'block';
+        }} catch (err) {{
+            console.error('Camera error:', err);
+            var errMsg = 'Tidak dapat mengakses kamera.';
+            if (err.name === 'NotAllowedError') errMsg = 'Izin kamera ditolak. Mohon izinkan akses kamera di browser.';
+            else if (err.name === 'NotFoundError') errMsg = 'Kamera tidak ditemukan di perangkat ini.';
+            showCustomAlert('Error Kamera', errMsg, 'error');
+        }}
+    }}
+
+    function stopCamera() {{
+        if (autoDetectInterval) {{ clearInterval(autoDetectInterval); autoDetectInterval = null; autoDetectActive = false; }}
+        if (cameraStream) {{
+            cameraStream.getTracks().forEach(function(t) {{ t.stop(); }});
+            cameraStream = null;
+        }}
+        var video = document.getElementById('cameraFeed');
+        if (video) video.srcObject = null;
+        document.getElementById('startCameraBtn').style.display = 'flex';
+        var captureBtn = document.getElementById('captureBtn');
+        var autoBtn = document.getElementById('autoDetectBtn');
+        var stopBtn = document.getElementById('stopCameraBtn');
+        var liveBadge = document.getElementById('liveBadge');
+        var autoBadge = document.getElementById('autoDetectBadge');
+        if (captureBtn) captureBtn.style.display = 'none';
+        if (autoBtn) {{ autoBtn.style.display = 'none'; autoBtn.style.background = '#6b7280'; autoBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Auto Detect'; }}
+        if (stopBtn) stopBtn.style.display = 'none';
+        if (liveBadge) liveBadge.style.display = 'none';
+        if (autoBadge) autoBadge.style.display = 'none';
+    }}
+
+    function captureFrameAsBlob(callback) {{
+        var video = document.getElementById('cameraFeed');
+        var canvas = document.getElementById('cameraCanvas');
+        if (!video || !canvas) return;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function(blob) {{
+            callback(blob);
+        }}, 'image/jpeg', 0.92);
+    }}
+
+    async function captureAndPredict() {{
+        if (!cameraStream) {{ showCustomAlert('Info', 'Kamera belum aktif.', 'error'); return; }}
+        captureFrameAsBlob(async function(blob) {{
+            if (!blob) return;
+            var file = new File([blob], 'camera_capture.jpg', {{ type: 'image/jpeg' }});
+            await predictImage(file);
+        }});
+    }}
+
+    function toggleAutoDetect() {{
+        var btn = document.getElementById('autoDetectBtn');
+        var badge = document.getElementById('autoDetectBadge');
+        if (autoDetectActive) {{
+            clearInterval(autoDetectInterval);
+            autoDetectInterval = null;
+            autoDetectActive = false;
+            if (btn) {{ btn.style.background = '#6b7280'; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Auto Detect'; }}
+            if (badge) badge.style.display = 'none';
+        }} else {{
+            autoDetectActive = true;
+            if (btn) {{ btn.style.background = '#10b981'; btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Stop Auto'; }}
+            if (badge) badge.style.display = 'block';
+            captureAndPredict();
+            autoDetectInterval = setInterval(function() {{
+                if (cameraStream && autoDetectActive) captureAndPredict();
+            }}, 5000);
+        }}
+    }}
+
     // ============ AI CHAT ASHLEY dengan Typing Animation ============
     let isTyping = false;
     let currentTypingTimeout = null;
+    let typingStopTimeout = null;
+
+
 
     function toggleChat() {{
         const bubble = document.getElementById('chatBubble');
@@ -2963,10 +3165,13 @@ def render_page(content: str, active: str = "home", message: str = None, message
         const messageDiv = document.createElement('div');
         messageDiv.className = `chat-message ${{sender}}`;
         
+        const botSVG = '<svg width="100%" height="100%" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><defs><linearGradient id="tdg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient><style>@keyframes tdspin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}.tdring{{transform-origin:0 0;animation:tdspin 20s linear infinite}}</style></defs><g class="tdring"><circle cx="0" cy="-28" r="9" fill="#e879f9"/><circle cx="24.2" cy="14" r="9" fill="#2dd4bf"/><circle cx="-24.2" cy="14" r="9" fill="#a78bf6"/></g><circle cx="0" cy="0" r="7" fill="#e879f9" opacity="0.5"/></svg>';
+        const soundWaveHTML = '<div class="sound-wave-avatar"><span class="sbar"></span><span class="sbar"></span><span class="sbar"></span><span class="sbar"></span><span class="sbar"></span></div>';
+
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
         if (sender === 'bot') {{
-            avatar.innerHTML = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+            avatar.innerHTML = soundWaveHTML; // Sound wave saat mulai mengetik
         }} else {{
             avatar.innerHTML = '<i class="fas fa-user"></i>';
         }}
@@ -2988,17 +3193,18 @@ def render_page(content: str, active: str = "home", message: str = None, message
         function addNextChar() {{
             if (index < fullText.length) {{
                 const currentChar = fullText.charAt(index);
-                // Handle newline menjadi <br>
+                // Pakai appendChild agar tidak re-render seluruh innerHTML
                 if (currentChar === '\\n') {{
-                    bubbleText.innerHTML += '<br>';
+                    bubbleText.appendChild(document.createElement('br'));
                 }} else {{
-                    bubbleText.innerHTML += currentChar;
+                    bubbleText.appendChild(document.createTextNode(currentChar));
                 }}
                 index++;
                 scrollChatToBottom();
                 currentTypingTimeout = setTimeout(addNextChar, typingSpeed);
             }} else {{
-                // Selesai mengetik, simpan history
+                // Selesai mengetik — kembalikan avatar ke SVG normal
+                if (sender === 'bot') avatar.innerHTML = botSVG;
                 saveChatHistory();
             }}
         }}
@@ -3019,7 +3225,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
-        const botImg = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        const botImg = '<svg width="100%" height="100%" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><defs><linearGradient id="tdg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient><style>@keyframes tdspin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}.tdring{{transform-origin:0 0;animation:tdspin 20s linear infinite}}</style></defs><g class="tdring"><circle cx="0" cy="-28" r="9" fill="#e879f9"/><circle cx="24.2" cy="14" r="9" fill="#2dd4bf"/><circle cx="-24.2" cy="14" r="9" fill="#a78bf6"/></g><circle cx="0" cy="0" r="7" fill="#e879f9" opacity="0.5"/></svg>';
         avatar.innerHTML = sender === 'bot' ? botImg : '<i class="fas fa-user"></i>';
         
         const bubbleText = document.createElement('div');
@@ -3045,14 +3251,9 @@ def render_page(content: str, active: str = "home", message: str = None, message
         
         const avatar = document.createElement('div');
         avatar.className = 'chat-avatar';
-        avatar.innerHTML = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
-        
-        const typingBubble = document.createElement('div');
-        typingBubble.className = 'chat-typing';
-        typingBubble.innerHTML = '<span class="typing-cursor"></span>';
+        avatar.innerHTML = '<svg width="100%" height="100%" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><defs><linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient><style>@keyframes lspin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}.lring{{transform-origin:0 0;animation:lspin 1s linear infinite}}</style></defs><g class="lring"><circle cx="0" cy="0" r="26" fill="none" stroke="url(#lg1)" stroke-width="8" stroke-linecap="round" stroke-dasharray="112 50"/></g></svg>';
         
         typingDiv.appendChild(avatar);
-        typingDiv.appendChild(typingBubble);
         
         messagesContainer.appendChild(typingDiv);
         scrollChatToBottom();
@@ -3095,7 +3296,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
 
         // Hapus pesan sambutan default, ganti dengan history
         messagesContainer.innerHTML = '';
-        const botImg = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        const botImg = '<svg width="100%" height="100%" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><defs><linearGradient id="tdg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient><style>@keyframes tdspin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}.tdring{{transform-origin:0 0;animation:tdspin 20s linear infinite}}</style></defs><g class="tdring"><circle cx="0" cy="-28" r="9" fill="#e879f9"/><circle cx="24.2" cy="14" r="9" fill="#2dd4bf"/><circle cx="-24.2" cy="14" r="9" fill="#a78bf6"/></g><circle cx="0" cy="0" r="7" fill="#e879f9" opacity="0.5"/></svg>';
         saved.forEach(function(msg) {{
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message ' + msg.sender;
@@ -3121,7 +3322,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         try {{ sessionStorage.removeItem(CHAT_STORAGE_KEY); }} catch(e) {{}}
         const messagesContainer = document.getElementById('chatMessages');
         if (!messagesContainer) return;
-        const botImg = '<img src="/static/images/ashley.png" alt="Ashley" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        const botImg = '<svg width="100%" height="100%" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;"><defs><linearGradient id="tdg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e879f9"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient><style>@keyframes tdspin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}.tdring{{transform-origin:0 0;animation:tdspin 20s linear infinite}}</style></defs><g class="tdring"><circle cx="0" cy="-28" r="9" fill="#e879f9"/><circle cx="24.2" cy="14" r="9" fill="#2dd4bf"/><circle cx="-24.2" cy="14" r="9" fill="#a78bf6"/></g><circle cx="0" cy="0" r="7" fill="#e879f9" opacity="0.5"/></svg>';
         messagesContainer.innerHTML = `
             <div class="chat-message bot">
                 <div class="chat-avatar">${{botImg}}</div>
@@ -3259,19 +3460,19 @@ async def home(request: Request):
         </div>
     </div>
 
-    <div class="bento-grid">
+    <div class="bento-grid" style="align-items: start;">
         <div class="glass-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-robot"></i> Analisa Cuaca (Ashley)</span>
+                <span class="card-title">Analisa Cuaca</span>
             </div>
             <div class="insights-text">
                 {insights}
             </div>
         </div>
 
-        <div class="glass-card">
+        <div class="glass-card" style="align-self: start;">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-info-circle"></i> Tanggal & Waktu</span>
+                <span class="card-title">Tanggal &amp; Waktu</span>
             </div>
             <div class="info-row">
                 <div class="info-item">
@@ -3297,7 +3498,7 @@ async def home(request: Request):
 
     <div class="glass-card">
         <div class="card-header">
-            <span class="card-title"><i class="fas fa-calendar-week"></i> Prakiraan 6 Hari</span>
+            <span class="card-title">Prakiraan 6 Hari</span>
         </div>
         <div class="forecast-grid">{forecast_html}</div>
     </div>
@@ -3319,45 +3520,219 @@ async def ml_dashboard(request: Request):
     local_info = get_local_time(selected_location["latitude"], selected_location["longitude"], selected_location.get("timezone"))
 
     ml_forecast_html = ""
-    for day in ml_predictions[:6]:
+    for idx, day in enumerate(ml_predictions[:6]):
         precip_value = day.get("precipitation", 0)
+        today_class = "today" if idx == 0 else ""
         ml_forecast_html += f"""
-        <div class="forecast-item">
-            <div class="forecast-day">{day["day"]}</div>
-            <div class="forecast-date">{day["date"]}</div>
-            <div class="forecast-icon"><i class="fas fa-chart-line" style="color: #8b5cf6;"></i></div>
-            <div class="forecast-temp">{int(day["temp_max"])}°</div>
-            <div class="forecast-temp-min">{int(day["temp_min"])}°</div>
-            <div class="forecast-precip"><i class="fas fa-tint"></i> {precip_value}mm</div>
-            <div class="ml-badge"><i class="fas fa-brain"></i> ML</div>
+        <div class="ml-forecast-card {today_class}">
+            <div class="ml-fc-day">{day["day"]}</div>
+            <div class="ml-fc-date">{day["date"]}</div>
+            <div class="ml-fc-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="ml-fc-temp-max">{int(day["temp_max"])}°</div>
+            <div class="ml-fc-temp-min">{int(day["temp_min"])}°</div>
+            <div class="ml-fc-precip"><i class="fas fa-tint"></i> {precip_value}mm</div>
         </div>
         """
 
     if model_info["is_trained"]:
+        mae_val  = model_info['mae']
+        mae_std  = model_info.get('mae_std', 0)
+        r2_val   = model_info['r2']
+        r2_std   = model_info.get('r2_std', 0)
+        rmse_val = model_info.get('rmse', 'N/A')
+        mape_val = model_info.get('mape', 'N/A')
+        fold_results = model_info.get('fold_results', [])
+        n_folds  = model_info.get('n_folds', 1)
+
+        mae_display  = f"{mae_val:.3f}" if isinstance(mae_val, float) else str(mae_val)
+        mae_std_disp = f"{mae_std:.3f}" if isinstance(mae_std, float) else "0"
+        r2_display   = f"{r2_val:.3f}"  if isinstance(r2_val, float)  else str(r2_val)
+        r2_std_disp  = f"{r2_std:.3f}"  if isinstance(r2_std, float)  else "0"
+        rmse_display = f"{rmse_val:.3f}" if isinstance(rmse_val, float) else str(rmse_val)
+        mape_display = f"{mape_val:.2f}%" if isinstance(mape_val, float) else str(mape_val)
+
+        fold_rows_html = ""
+        fold_mae_data  = []
+        fold_rmse_data = []
+        fold_r2_data   = []
+        fold_labels    = []
+
+        for i, f in enumerate(fold_results):
+            r2_pct  = round(f['r2'] * 100, 1)
+            bar_w   = min(int(r2_pct), 100)
+            best_r2 = max((x['r2'] for x in fold_results), default=0)
+            if f['r2'] == best_r2:
+                status_html = '<span style="background:#1D9E75;color:#E1F5EE;font-size:11px;padding:2px 10px;border-radius:6px;font-weight:600;">Terbaik</span>'
+                fold_num_style = "background:#8b5cf6;color:#fff;"
+            elif f['r2'] >= 0.95:
+                status_html = '<span style="background:#0F6E56;color:#9FE1CB;font-size:11px;padding:2px 10px;border-radius:6px;">Baik</span>'
+                fold_num_style = "background:rgba(139,92,246,0.15);color:#8b5cf6;"
+            else:
+                status_html = '<span style="background:#854F0B;color:#FAC775;font-size:11px;padding:2px 10px;border-radius:6px;">Cukup</span>'
+                fold_num_style = "background:rgba(139,92,246,0.1);color:#8b5cf6;"
+
+            fold_rows_html += f"""
+            <tr style="border-bottom:1px solid rgba(139,92,246,0.1);">
+                <td style="padding:10px 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:600;{fold_num_style}">{f['fold']}</span></td>
+                <td style="padding:10px 8px;color:rgba(255,255,255,0.5);font-size:13px;">{f['train_size']}</td>
+                <td style="padding:10px 8px;color:rgba(255,255,255,0.5);font-size:13px;">{f['test_size']}</td>
+                <td style="padding:10px 8px;font-weight:600;color:#c4b5fd;">{f['mae']:.3f}</td>
+                <td style="padding:10px 8px;font-weight:600;color:#c4b5fd;">{f['rmse']:.3f}</td>
+                <td style="padding:10px 8px;font-weight:600;color:#c4b5fd;">{f['r2']:.3f}</td>
+                <td style="padding:10px 8px;min-width:120px;">
+                    <div style="background:rgba(139,92,246,0.15);border-radius:4px;height:8px;overflow:hidden;">
+                        <div style="width:{bar_w}%;height:100%;background:#8b5cf6;border-radius:4px;"></div>
+                    </div>
+                </td>
+                <td style="padding:10px 8px;">{status_html}</td>
+            </tr>"""
+
+            fold_labels.append(f"Fold {f['fold']}")
+            fold_mae_data.append(f['mae'])
+            fold_rmse_data.append(f['rmse'])
+            fold_r2_data.append(f['r2'])
+
+        fold_labels_js  = str(fold_labels)
+        fold_mae_js     = str(fold_mae_data)
+        fold_rmse_js    = str(fold_rmse_data)
+        fold_r2_js      = str(fold_r2_data)
+
+        fold_section = ""
+        if fold_results:
+            fold_section = f"""
+            <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:20px;margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.9);display:flex;align-items:center;gap:8px;">
+                        <i class="fas fa-layer-group" style="color:#8b5cf6;"></i> Hasil per fold ({n_folds}-fold cross-validation)
+                    </span>
+                    <span style="background:rgba(139,92,246,0.25);color:#c4b5fd;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;">{n_folds} Fold</span>
+                </div>
+                <div style="overflow-x:auto;">
+                <table class="ml-fold-table">
+                    <thead>
+                        <tr style="border-bottom:1px solid rgba(139,92,246,0.3);">
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Fold</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Train</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Test</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">MAE</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">RMSE</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">R²</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Akurasi R²</th>
+                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>{fold_rows_html}</tbody>
+                </table>
+                </div>
+            </div>
+
+            <div class="ml-chart-grid">
+                <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:16px;min-width:0;overflow:hidden;">
+                    <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <i class="fas fa-chart-line" style="color:#8b5cf6;font-size:14px;flex-shrink:0;"></i> MAE &amp; RMSE per fold
+                    </div>
+                    <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
+                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></span>MAE</span>
+                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1D9E75;flex-shrink:0;"></span>RMSE</span>
+                    </div>
+                    <div style="position:relative;height:150px;width:100%;"><canvas id="maeRmseChart" role="img" aria-label="MAE dan RMSE per fold"></canvas></div>
+                </div>
+                <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:16px;min-width:0;overflow:hidden;">
+                    <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <i class="fas fa-chart-bar" style="color:#8b5cf6;font-size:14px;flex-shrink:0;"></i> R² score per fold
+                    </div>
+                    <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
+                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></span>R² score</span>
+                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E24B4A;flex-shrink:0;"></span>Threshold 0.90</span>
+                    </div>
+                    <div style="position:relative;height:150px;width:100%;"><canvas id="r2FoldChart" role="img" aria-label="R² per fold"></canvas></div>
+                </div>
+            </div>
+
+            <script>
+            (function(){{
+                var labels  = {fold_labels_js};
+                var maeData = {fold_mae_js};
+                var rmseData= {fold_rmse_js};
+                var r2Data  = {fold_r2_js};
+
+                if(typeof Chart !== 'undefined'){{
+                    new Chart(document.getElementById('maeRmseChart'), {{
+                        type:'line',
+                        data:{{
+                            labels:labels,
+                            datasets:[
+                                {{label:'MAE',data:maeData,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,0.1)',tension:0.35,pointRadius:5,pointBackgroundColor:'#8b5cf6',fill:true,borderWidth:2}},
+                                {{label:'RMSE',data:rmseData,borderColor:'#1D9E75',backgroundColor:'transparent',tension:0.35,pointRadius:5,pointBackgroundColor:'#1D9E75',borderDash:[5,3],borderWidth:2}}
+                            ]
+                        }},
+                        options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{
+                            y:{{ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)',callback:function(v){{return v.toFixed(2);}}}},grid:{{color:'rgba(255,255,255,0.05)'}}}},
+                            x:{{ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)'}},grid:{{display:false}}}}
+                        }}}}
+                    }});
+                    var r2min = Math.min.apply(null,r2Data)-0.01;
+                    var r2max = Math.max.apply(null,r2Data)+0.005;
+                    new Chart(document.getElementById('r2FoldChart'), {{
+                        type:'bar',
+                        data:{{
+                            labels:labels,
+                            datasets:[
+                                {{label:'R²',data:r2Data,backgroundColor:r2Data.map(function(v,i){{return i===r2Data.indexOf(Math.max.apply(null,r2Data))?'#8b5cf6':'rgba(139,92,246,0.5)'}}),borderRadius:4,borderSkipped:false}},
+                                {{label:'Threshold',data:r2Data.map(function(){{return 0.90;}}),type:'line',borderColor:'#E24B4A',borderDash:[4,3],borderWidth:1.5,pointRadius:0,fill:false}}
+                            ]
+                        }},
+                        options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{
+                            y:{{min:Math.min(r2min,0.89),max:r2max,ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)',callback:function(v){{return v.toFixed(3);}}}},grid:{{color:'rgba(255,255,255,0.05)'}}}},
+                            x:{{ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)'}},grid:{{display:false}}}}
+                        }}}}
+                    }});
+                }}
+            }})();
+            </script>
+            """
+
         model_status = f"""
         <div class="glass-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-chart-simple"></i> Metrik Model (Random Forest)</span>
+                <span class="card-title">Metrik Model (Random Forest)</span>
             </div>
-            <div class="stats-grid" style="margin-bottom: 0;">
-                <div class="stat-card" style="flex: 1;">
-                    <div class="stat-icon"><i class="fas fa-chart-line" style="color: #8b5cf6;"></i></div>
-                    <div class="stat-label">MAE (Mean Absolute Error)</div>
-                    <div class="stat-value" style="color: #8b5cf6;">{model_info['mae']:.6f}°C</div>
+
+            <div class="ml-metric-grid">
+                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">MAE rata-rata ({n_folds}-fold)</div>
+                    <div style="font-size:20px;font-weight:700;color:#1D9E75;">{mae_display}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">±{mae_std_disp} std dev</div>
                 </div>
-                <div class="stat-card" style="flex: 1;">
-                    <div class="stat-icon"><i class="fas fa-chart-bar" style="color: #8b5cf6;"></i></div>
-                    <div class="stat-label">R² Score (Akurasi)</div>
-                    <div class="stat-value" style="color: #8b5cf6;">{model_info['r2']:.6f}</div>
+                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">R² rata-rata ({n_folds}-fold)</div>
+                    <div style="font-size:20px;font-weight:700;color:#1D9E75;">{r2_display}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">±{r2_std_disp} std dev</div>
                 </div>
-                <div class="stat-card" style="flex: 1;">
-                    <div class="stat-icon"><i class="fas fa-map-marker-alt" style="color: #8b5cf6;"></i></div>
-                    <div class="stat-label">Lokasi Training</div>
-                    <div class="stat-value" style="color: #8b5cf6; font-size: 16px;">{model_info['location']}</div>
+                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">RMSE rata-rata</div>
+                    <div style="font-size:20px;font-weight:700;color:#c4b5fd;">{rmse_display}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Root Mean Squared Error</div>
+                </div>
+                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">MAPE rata-rata</div>
+                    <div style="font-size:20px;font-weight:700;color:#1D9E75;">{mape_display}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Mean Abs. % Error</div>
                 </div>
             </div>
-            <form method="GET" action="/train-model" style="margin-top: 24px;" id="trainForm">
-                <button type="submit" class="train-btn-ml" style="width: 100%;">
+
+            {fold_section}
+
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:12px;padding:12px 16px;margin-bottom:20px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-map-marker-alt" style="color:#8b5cf6;"></i>
+                    <span style="font-size:12px;color:rgba(255,255,255,0.5);">Lokasi Training</span>
+                </div>
+                <span style="font-size:14px;font-weight:600;color:#c4b5fd;">{model_info['location']}</span>
+            </div>
+
+            <form method="GET" action="/train-model" style="margin-top:4px;" id="trainForm">
+                <button type="submit" class="train-btn-ml" style="width:100%;">
                     <i class="fas fa-sync-alt"></i> Latih Ulang Model ML
                 </button>
             </form>
@@ -3365,16 +3740,33 @@ async def ml_dashboard(request: Request):
         """
     else:
         model_status = f"""
-        <div class="glass-card" style="text-align: center;">
+        <div class="glass-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-exclamation-triangle"></i> Model Belum Dilatih</span>
+                <span class="card-title">Model Belum Dilatih</span>
             </div>
-            <div style="padding: 32px 0;">
-                <i class="fas fa-brain" style="font-size: 64px; color: var(--ml-purple); margin-bottom: 24px; display: block;"></i>
-                <p style="color: var(--text-tertiary); margin-bottom: 24px;">Klik tombol di bawah untuk melatih model Random Forest Regressor</p>
+            <div style="text-align: center; padding: 36px 24px;">
+                <div style="
+                    width: 80px; height: 80px; border-radius: 50%;
+                    background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(99,102,241,0.15));
+                    border: 2px solid rgba(139,92,246,0.3);
+                    display: flex; align-items: center; justify-content: center;
+                    margin: 0 auto 20px;
+                ">
+                    <i class="fas fa-brain" style="font-size: 36px; color: #8b5cf6;"></i>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 8px; font-size: 16px; font-weight: 600;">Model Siap Dilatih</p>
+                <p style="color: var(--text-tertiary); margin-bottom: 28px; font-size: 13px; line-height: 1.6;">
+                    Klik tombol di bawah untuk melatih model<br>Random Forest Regressor dengan data cuaca terkini
+                </p>
                 <form method="GET" action="/train-model" id="trainForm">
-                    <button type="submit" class="train-btn-ml" style="background: linear-gradient(135deg, #8b5cf6, #a855f7, #c084fc); border: none; border-radius: 50px; padding: 14px 28px; color: white; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.3s ease; margin-top: 16px; width: auto; min-width: 220px;">
-                        <i class="fas fa-play"></i> Latih Model ML Sekarang
+                    <button type="submit" class="train-btn-ml" style="
+                        background: linear-gradient(135deg, #8b5cf6, #a855f7, #c084fc);
+                        border: none; border-radius: 50px; padding: 14px 36px;
+                        color: white; font-weight: 700; font-size: 14px;
+                        cursor: pointer; transition: all 0.3s ease;
+                        min-width: 240px; box-shadow: 0 4px 16px rgba(139,92,246,0.35);
+                    ">
+                        <i class="fas fa-play"></i>&nbsp; Latih Model ML Sekarang
                     </button>
                 </form>
             </div>
@@ -3390,34 +3782,115 @@ async def ml_dashboard(request: Request):
         cnn_btn_disabled = ""
 
     image_classifier_html = f"""
-    <div class="glass-card" style="height: 100%;">
+    <div class="glass-card">
         <div class="card-header">
-            <span class="card-title"><i class="fas fa-camera"></i> Pendeteksi Cuaca dari Gambar (CNN)</span>
+            <span class="card-title">Pendeteksi Cuaca dari Gambar (CNN)</span>
         </div>
         <div style="padding: 16px;">
-            <div id="image-upload-area" style="
-                border: 2px dashed var(--border-color);
-                border-radius: 24px;
-                padding: 30px;
-                text-align: center;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                background: var(--bg-tertiary);
-                margin-bottom: 20px;
-            ">
-                <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: var(--accent); margin-bottom: 12px;"></i>
-                <p style="margin-bottom: 8px;">Klik atau drag & drop gambar di sini</p>
-                <p style="font-size: 12px; color: var(--text-tertiary);">Format: JPG, PNG (Max 5MB)</p>
-                <input type="file" id="weatherImageInput" accept="image/*" style="display: none;">
-            </div>
 
-            <div id="image-preview-container" style="display: none; margin-bottom: 20px;">
-                <img id="imagePreview" style="max-width: 100%; max-height: 250px; border-radius: 20px; margin-bottom: 12px;">
-                <button id="clearImageBtn" class="search-btn" style="background: #6b7280; padding: 8px 16px; font-size: 12px;">
-                    <i class="fas fa-times"></i> Hapus Gambar
+            <!-- Tab Mode Toggle -->
+            <div style="display: flex; gap: 8px; margin-bottom: 16px; background: var(--bg-tertiary); border-radius: 16px; padding: 4px;">
+                <button id="tab-upload" onclick="switchCNNTab('upload')" style="
+                    flex: 1; padding: 8px 12px; border: none; border-radius: 12px;
+                    background: var(--accent); color: white; font-size: 13px;
+                    font-weight: 600; cursor: pointer; transition: all 0.3s;
+                ">
+                    <i class="fas fa-upload"></i> Upload Gambar
+                </button>
+                <button id="tab-camera" onclick="switchCNNTab('camera')" style="
+                    flex: 1; padding: 8px 12px; border: none; border-radius: 12px;
+                    background: transparent; color: var(--text-secondary); font-size: 13px;
+                    font-weight: 600; cursor: pointer; transition: all 0.3s;
+                ">
+                    <i class="fas fa-video"></i> Kamera Live
                 </button>
             </div>
 
+            <!-- PANEL UPLOAD -->
+            <div id="panel-upload">
+                <div id="image-upload-area" style="
+                    border: 2px dashed var(--border-color);
+                    border-radius: 24px;
+                    padding: 30px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    background: var(--bg-tertiary);
+                    margin-bottom: 20px;
+                ">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: var(--accent); margin-bottom: 12px;"></i>
+                    <p style="margin-bottom: 8px;">Klik atau drag & drop gambar di sini</p>
+                    <p style="font-size: 12px; color: var(--text-tertiary);">Format: JPG, PNG (Max 5MB)</p>
+                    <input type="file" id="weatherImageInput" accept="image/*" style="display: none;">
+                </div>
+
+                <div id="image-preview-container" style="display: none; margin-bottom: 20px;">
+                    <img id="imagePreview" style="max-width: 100%; max-height: 250px; border-radius: 20px; margin-bottom: 12px;">
+                    <button id="clearImageBtn" class="search-btn" style="background: #6b7280; padding: 8px 16px; font-size: 12px;">
+                        <i class="fas fa-times"></i> Hapus Gambar
+                    </button>
+                </div>
+            </div>
+
+            <!-- PANEL KAMERA LIVE -->
+            <div id="panel-camera" style="display: none;">
+                <div style="position: relative; border-radius: 20px; overflow: hidden; margin-bottom: 12px; background: #000;">
+                    <video id="cameraFeed" autoplay playsinline muted style="
+                        width: 100%; max-height: 260px; object-fit: cover;
+                        display: block; border-radius: 20px;
+                    "></video>
+                    <!-- Live badge -->
+                    <div id="liveBadge" style="
+                        display: none; position: absolute; top: 10px; left: 10px;
+                        background: #ef4444; color: white; font-size: 11px;
+                        font-weight: 700; padding: 3px 10px; border-radius: 20px;
+                        letter-spacing: 1px;
+                    ">&#9679; LIVE</div>
+                    <!-- Auto detect badge -->
+                    <div id="autoDetectBadge" style="
+                        display: none; position: absolute; top: 10px; right: 10px;
+                        background: rgba(0,0,0,0.6); color: #34d399; font-size: 11px;
+                        font-weight: 600; padding: 3px 10px; border-radius: 20px;
+                    ">AUTO DETECT ON</div>
+                </div>
+                <canvas id="cameraCanvas" style="display: none;"></canvas>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px;">
+                    <button id="startCameraBtn" onclick="startCamera()" style="
+                        padding: 9px 18px; border: none; border-radius: 12px;
+                        background: var(--accent); color: white; font-size: 13px;
+                        font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;
+                    ">
+                        <i class="fas fa-play"></i> Buka Kamera
+                    </button>
+                    <button id="captureBtn" onclick="captureAndPredict()" style="
+                        padding: 9px 18px; border: none; border-radius: 12px;
+                        background: #10b981; color: white; font-size: 13px;
+                        font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px;
+                    ">
+                        <i class="fas fa-camera"></i> Foto & Deteksi
+                    </button>
+                    <button id="autoDetectBtn" onclick="toggleAutoDetect()" style="
+                        padding: 9px 18px; border: none; border-radius: 12px;
+                        background: #6b7280; color: white; font-size: 13px;
+                        font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px;
+                    ">
+                        <i class="fas fa-sync-alt"></i> Auto Detect
+                    </button>
+                    <button id="stopCameraBtn" onclick="stopCamera()" style="
+                        padding: 9px 18px; border: none; border-radius: 12px;
+                        background: #ef4444; color: white; font-size: 13px;
+                        font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px;
+                    ">
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                </div>
+                <p style="font-size: 11px; color: var(--text-tertiary); text-align: center;">
+                    Arahkan kamera ke langit atau pemandangan luar ruangan
+                </p>
+            </div>
+
+            <!-- Hasil Prediksi (shared) -->
             <div id="prediction-result" style="display: none; background: var(--accent-soft); border-radius: 20px; padding: 20px; margin-top: 16px;">
                 <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                     <div id="prediction-icon" style="font-size: 48px;"></div>
@@ -3446,30 +3919,241 @@ async def ml_dashboard(request: Request):
     tz_display = local_info["timezone"]
 
     content = f"""
+    <style>
+        /* ====== ML PAGE RESPONSIVE STYLES ====== */
+        .ml-metric-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }}
+        .ml-chart-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+            min-width: 0;
+        }}
+        .ml-chart-grid > div {{
+            min-width: 0;
+            overflow: hidden;
+        }}
+        .ml-fold-table {{ width:100%;border-collapse:collapse;font-size:13px;color:rgba(255,255,255,0.85); }}
+        .ml-fold-table th {{ padding:8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;border-bottom:1px solid rgba(139,92,246,0.3);white-space:nowrap; }}
+        .ml-fold-table td {{ padding:10px 8px;border-bottom:1px solid rgba(139,92,246,0.1);white-space:nowrap; }}
+
+        /* ====== FORECAST CARD CANTIK ====== */
+        .ml-forecast-scroll {{
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            padding: 4px 0 8px;
+        }}
+        .ml-forecast-card {{
+            background: linear-gradient(145deg, rgba(139,92,246,0.13), rgba(99,102,241,0.08));
+            border: 1px solid rgba(139,92,246,0.22);
+            border-radius: 18px;
+            padding: 14px 10px;
+            text-align: center;
+            cursor: default;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }}
+        .ml-forecast-card::before {{
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(139,92,246,0.07) 0%, transparent 60%);
+            border-radius: inherit;
+            pointer-events: none;
+        }}
+        .ml-forecast-card:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(139,92,246,0.25);
+            border-color: rgba(139,92,246,0.45);
+        }}
+        .ml-forecast-card.today {{
+            background: linear-gradient(145deg, rgba(139,92,246,0.25), rgba(99,102,241,0.18));
+            border-color: rgba(139,92,246,0.5);
+            box-shadow: 0 4px 16px rgba(139,92,246,0.2);
+        }}
+        .ml-fc-day {{
+            font-size: 11px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }}
+        .ml-fc-date {{
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(196,181,253,0.85);
+            margin-bottom: 8px;
+        }}
+        .ml-fc-icon {{
+            font-size: 22px;
+            margin-bottom: 6px;
+            color: #8b5cf6;
+        }}
+        .ml-fc-temp-max {{
+            font-size: 20px;
+            font-weight: 800;
+            color: #f0f0ff;
+            line-height: 1;
+        }}
+        .ml-fc-temp-min {{
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.4);
+            margin-top: 2px;
+        }}
+        .ml-fc-precip {{
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: rgba(96,165,250,0.9);
+            margin-top: 6px;
+            background: rgba(96,165,250,0.1);
+            padding: 2px 8px;
+            border-radius: 20px;
+        }}
+        .ml-fc-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 9px;
+            font-weight: 700;
+            color: rgba(196,181,253,0.8);
+            background: rgba(139,92,246,0.18);
+            border: 1px solid rgba(139,92,246,0.3);
+            padding: 2px 7px;
+            border-radius: 20px;
+            margin-top: 6px;
+            letter-spacing: 0.3px;
+        }}
+
+        /* ====== BOTTOM BENTO GRID ====== */
+        .ml-bottom-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+            align-items: start;
+        }}
+        .ml-datetime-card {{
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }}
+        .ml-datetime-item {{
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(139,92,246,0.08);
+            border: 1px solid rgba(139,92,246,0.15);
+            border-radius: 16px;
+            padding: 16px;
+        }}
+        .ml-datetime-item-icon {{
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+            flex-shrink: 0;
+        }}
+        .ml-datetime-label {{
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 4px;
+        }}
+        .ml-datetime-value {{
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.1;
+        }}
+        .ml-datetime-sub {{
+            font-size: 12px;
+            color: rgba(196,181,253,0.7);
+            margin-top: 2px;
+        }}
+
+        /* ====== RESPONSIVE BREAKPOINTS ====== */
+        @media (max-width: 1024px) {{
+            .ml-forecast-scroll {{
+                grid-template-columns: repeat(3, 1fr);
+            }}
+            .ml-bottom-grid {{
+                grid-template-columns: 1fr 1fr;
+            }}
+        }}
+        @media (max-width: 768px) {{
+            .ml-metric-grid {{ grid-template-columns: repeat(2, 1fr); }}
+            .ml-chart-grid {{ grid-template-columns: 1fr; }}
+            .ml-fold-table th:nth-child(2),.ml-fold-table td:nth-child(2),
+            .ml-fold-table th:nth-child(3),.ml-fold-table td:nth-child(3) {{ display: none; }}
+            .ml-forecast-scroll {{
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }}
+            .ml-bottom-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+        @media (max-width: 480px) {{
+            .ml-metric-grid {{ grid-template-columns: repeat(2, 1fr); gap: 8px; }}
+            .ml-fold-table {{ font-size: 12px; }}
+            .ml-fold-table th, .ml-fold-table td {{ padding: 8px 4px; }}
+            .ml-forecast-scroll {{
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }}
+            .ml-fc-temp-max {{ font-size: 17px; }}
+            .ml-bottom-grid {{
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }}
+        }}
+    </style>
+
     <div class="hero">
         <h1 class="hero-title">Machine Learning</h1>
-        <p class="hero-subtitle">Prediksi cuaca berdasarkan gambar menggunakan teknologi deep learning</p>
+        <p class="hero-subtitle">Prediksi cuaca cerdas menggunakan Random Forest &amp; CNN deep learning</p>
     </div>
 
-    <div class="bento-grid">
+    <!-- Baris 1: Forecast 6 Hari -->
+    <div style="display:flex;flex-direction:column;gap:20px;">
         <div class="glass-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-chart-line"></i> Prediksi 6 Hari (Random Forest)</span>
+                <span class="card-title">Prediksi 6 Hari (Random Forest)</span>
             </div>
-            <div class="forecast-grid">{ml_forecast_html}</div>
+            <div class="ml-forecast-scroll">{ml_forecast_html}</div>
         </div>
 
+        <!-- Baris 2: Metrik Model -->
         {model_status}
     </div>
 
-    <div class="bento-grid" style="grid-template-columns: repeat(2, 1fr);">
+    <!-- Baris 3: CNN Classifier + Tanggal & Waktu (responsive 2-kolom) -->
+    <div class="ml-bottom-grid">
         {image_classifier_html}
 
-        <div class="glass-card" style="height: 100%;">
+        <div class="glass-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-info-circle"></i> Tanggal & Waktu</span>
+                <span class="card-title">Tanggal &amp; Waktu</span>
             </div>
-            <div class="info-row">
+           <div class="info-row">
                 <div class="info-item">
                     <i class="fas fa-calendar-alt info-icon"></i>
                     <div>
@@ -3588,7 +4272,7 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
 
     <div class="glass-card">
         <div class="card-header">
-            <span class="card-title"><i class="fas fa-pen"></i> Form Ulasan</span>
+            <span class="card-title">Form Ulasan</span>
         </div>
         
         <form class="review-form" method="POST" action="/ulasan/submit" onsubmit="return validateForm()">
@@ -3738,7 +4422,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
         <div class="glass-card">
             <div class="card-header">
                 <span class="card-title">
-                    <i class="fas fa-city"></i> Cari berdasarkan Nama Kota
+                    Cari berdasarkan Nama Kota
                 </span>
             </div>
             <form method="POST" action="/search/city">
@@ -3758,7 +4442,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
         <div class="glass-card">
             <div class="card-header">
                 <span class="card-title">
-                    <i class="fas fa-crosshairs"></i> Cari berdasarkan Koordinat
+                    Cari berdasarkan Koordinat
                 </span>
             </div>
             <form method="POST" action="/search/coords">
@@ -3794,7 +4478,7 @@ async def search_page(request: Request, message: str = None, type: str = None):
     <div class="glass-card" style="margin-top: 20px;">
         <div class="card-header">
             <span class="card-title">
-                <i class="fas fa-location-arrow"></i> Contoh Koordinat Populer
+                Contoh Koordinat Populer
             </span>
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;">
@@ -4093,18 +4777,18 @@ async def about_page(request: Request, message: str = None, type: str = None):
     <div class="about-container">
         <div class="glass-card about-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-info-circle"></i> introduction</span>
+                <span class="card-title">Introduction</span>
             </div>
             <div class="section-content">
-                <p><strong>WeatherAI</strong> adalah aplikasi prediksi cuaca berbasis Artificial Intelligence yang menyajikan informasi meteorologi real-time, prakiraan 6 hari ke depan, serta analisis cuaca dalam bahasa alami. Aplikasi ini mengintegrasikan data dari Open-Meteo API, model Machine Learning Random Forest untuk prediksi suhu, dan <strong>Ashley</strong> — asisten AI berbasis Gemini — untuk menghasilkan wawasan cuaca yang kontekstual dan mudah dipahami. Dengan antarmuka modern, dark mode persisten, serta fitur penyimpanan lokasi favorit, WeatherAI hadir sebagai solusi prediksi cuaca yang praktis, akurat, dan ramah pengguna.</p>
-                <p><strong>Fitur utama</strong> meliputi cuaca real-time (suhu, kelembaban, angin, tekanan udara, UV index), data curah hujan harian akurat menggunakan <em>precipitation_sum</em>, prakiraan 6 hari, kualitas udara (AQI, PM2.5, PM10), serta pencarian lokasi berdasarkan nama kota atau koordinat GPS. Fitur unggulan lainnya adalah deteksi kondisi cuaca dari gambar menggunakan Deep Learning CNN dengan 5 kategori (cerah, berawan, hujan, berkabut, fajar), dan chat AI Ashley yang riwayat percakapannya tetap tersimpan selama sesi berlangsung meski berpindah halaman.</p>
-                <p><strong>Cara kerja</strong> aplikasi: sistem mengambil data cuaca dari Open-Meteo API berdasarkan koordinat lokasi, lalu model Random Forest memprediksi suhu 6 hari ke depan. Curah hujan ditampilkan sebagai akumulasi harian (<em>precipitation_sum</em>) sehingga konsisten antara dashboard dan prakiraan. Untuk deteksi gambar, CNN mengklasifikasikan foto pemandangan ke kategori cuaca. Semua data kemudian diproses Gemini AI menjadi narasi analisis yang mudah dipahami. Kombinasi real-time data, machine learning, deep learning, dan AI generatif menjadikan WeatherAI lebih cerdas dan akurat dibanding aplikasi cuaca konvensional.</p>
+                <p><strong>WeatherAI</strong> adalah aplikasi prediksi cuaca cerdas berbasis kecerdasan buatan yang dirancang untuk memberikan informasi cuaca secara akurat, real-time, dan mudah dipahami. Dikembangkan oleh tim mahasiswa Universitas Bina Sarana Informatika, aplikasi ini menggabungkan teknologi machine learning modern dengan data cuaca langsung dari API terpercaya untuk menghadirkan pengalaman pemantauan cuaca yang komprehensif.</p>
+                <p><strong>Fitur utama</strong> WeatherAI mencakup prakiraan cuaca 6 hari ke depan, analisis kualitas udara real-time, prediksi suhu berbasis algoritma Random Forest, serta pendeteksi kondisi cuaca dari gambar menggunakan model Convolutional Neural Network (CNN). Selain itu, tersedia asisten AI bernama Ashley yang siap menjawab pertanyaan seputar cuaca secara interaktif dalam bahasa Indonesia.</p>
+                <p><strong>Cara kerja</strong> aplikasi ini adalah dengan mengambil data cuaca langsung dari Open-Meteo API berdasarkan koordinat lokasi pengguna, kemudian memprosesnya menggunakan model machine learning yang telah dilatih dengan data historis. Analisis mendalam dilakukan oleh model AI Gemini untuk menghasilkan wawasan cuaca yang mudah dipahami, sehingga pengguna dapat membuat keputusan lebih baik terkait aktivitas sehari-hari mereka.</p>
             </div>
         </div>
 
         <div class="glass-card about-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-code"></i> Teknologi & Framework</span>
+                <span class="card-title">Teknologi & Framework</span>
             </div>
             <div class="section-content">
                 <div class="tech-grid">
@@ -4120,7 +4804,7 @@ async def about_page(request: Request, message: str = None, type: str = None):
 
         <div class="glass-card about-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-book-open"></i> Ulasan Pengguna</span>
+                <span class="card-title">Ulasan Pengguna</span>
             </div>
             <div class="section-content" style="padding: 0 24px 24px 24px;">
                 <div class="scrollable-testimonials" id="testimonialsScroll">
@@ -4132,13 +4816,12 @@ async def about_page(request: Request, message: str = None, type: str = None):
 
         <div class="glass-card about-card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-shield-alt"></i> Privasi & Keamanan</span>
+                <span class="card-title">Privasi & Keamanan</span>
             </div>
             <div class="section-content">
-                <p>WeatherAI menghormati dan melindungi privasi setiap pengguna. Aplikasi ini <strong>tidak mengumpulkan, menyimpan, atau membagikan data pribadi</strong> seperti nama, alamat email, nomor telepon, atau lokasi spesifik pengguna ke pihak manapun. Semua data cuaca yang ditampilkan diperoleh secara langsung dari API publik Open-Meteo dan diproses secara anonim serta real-time tanpa disimpan dalam database server.</p>
-                <p><strong>Data lokasi yang Anda simpan</strong> (seperti nama kota favorit dan koordinat GPS) hanya tersimpan secara lokal di perangkat Anda sendiri menggunakan SQLite. Data ini tidak pernah dikirim ke server eksternal manapun dan dapat Anda hapus kapan saja melalui tombol hapus pada sidebar lokasi tersimpan.</p>
-                <p><strong>Preferensi tampilan</strong> seperti mode gelap (dark mode) disimpan di <em>localStorage</em> browser Anda sehingga tetap aktif meski berpindah halaman atau menutup browser. Riwayat percakapan dengan Ashley disimpan sementara di <em>sessionStorage</em> — hanya berlaku selama sesi browser aktif dan otomatis terhapus saat tab atau browser ditutup. Data ini sepenuhnya bersifat lokal dan tidak dikirim ke server.</p>
-                <p>Untuk fitur <strong>AI Assistant (Ashley)</strong>, data cuaca dan kualitas udara real-time hanya digunakan untuk menghasilkan analisis cuaca. Kami tidak menggunakan cookie pelacak, tidak menanamkan tracker iklan, dan tidak memonetisasi data pengguna. Keamanan dan kenyamanan Anda adalah prioritas utama kami.</p>
+                <p>WeatherAI berkomitmen untuk menjaga privasi dan keamanan data seluruh penggunanya. Kami tidak mengumpulkan informasi pribadi yang bersifat sensitif. Data lokasi yang Anda masukkan hanya digunakan untuk keperluan pengambilan informasi cuaca dari layanan pihak ketiga (Open-Meteo API) dan tidak pernah disimpan tanpa persetujuan Anda secara eksplisit.</p>
+                <p>Semua data cuaca dikirimkan melalui koneksi yang aman. Lokasi yang Anda simpan dalam aplikasi disimpan secara lokal di server hanya untuk keperluan fungsional, yaitu menampilkan cuaca pada sesi berikutnya. Kami tidak membagikan data pengguna kepada pihak ketiga manapun untuk tujuan komersial atau periklanan.</p>
+                <p>Untuk keamanan fitur penghapusan ulasan, sistem dilindungi dengan verifikasi kata kunci admin. Riwayat percakapan dengan asisten AI Ashley disimpan sementara di sesi browser Anda dan akan otomatis terhapus saat sesi berakhir. Jika Anda memiliki pertanyaan terkait privasi, silakan hubungi tim kami melalui WhatsApp yang tersedia di aplikasi.</p>
             </div>
         </div>
     </div>
@@ -4197,8 +4880,15 @@ async def train_model_route(request: Request):
     try:
         result = weather_predictor.train_model(selected_location["name"], selected_location["latitude"], selected_location["longitude"])
         if is_ajax:
-            return {"success": True, "mae": result["mae"], "r2": result["r2"]}
-        return RedirectResponse(url=f"/main?message=Model berhasil dilatih! MAE: {result['mae']:.6f}°C, R²: {result['r2']}&type=success", status_code=303)
+            return {
+                "success": True,
+                "mae":  result["mae"],  "mae_std":  result.get("mae_std", 0),
+                "r2":   result["r2"],   "r2_std":   result.get("r2_std", 0),
+                "rmse": result.get("rmse", "N/A"),
+                "mape": result.get("mape", "N/A"),
+                "fold_results": result.get("fold_results", []),
+            }
+        return RedirectResponse(url=f"/main?message=Model berhasil dilatih! MAE: {result['mae']:.4f}°C ±{result.get('mae_std',0):.4f}, R²: {result['r2']:.4f}&type=success", status_code=303)
     except Exception as e:
         if is_ajax:
             return {"success": False, "error": str(e)}
@@ -4257,6 +4947,38 @@ async def predict_weather_from_image(file: UploadFile = File(...)):
         print(f"Error predict image: {e}")
         return {"success": False, "error": str(e)}
 
+@app.post("/predict-weather-camera")
+async def predict_weather_from_camera(request: Request):
+    """Endpoint untuk menerima frame dari kamera (base64 JPEG) dan memprediksi cuaca"""
+    try:
+        body = await request.json()
+        image_data = body.get("image_data", "")
+        
+        if not image_data:
+            return {"success": False, "error": "Tidak ada data gambar"}
+        
+        # Strip data URL prefix jika ada
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+        
+        contents = base64.b64decode(image_data)
+        result = weather_image_classifier.predict_image(contents)
+        
+        if "error" in result:
+            return {"success": False, "error": result["error"]}
+        
+        return {
+            "success": True,
+            "prediction": result["prediction"],
+            "condition": result["condition"],
+            "confidence": result["confidence"],
+            "weather_code": result["weather_code"],
+            "all_scores": result["all_scores"],
+        }
+    except Exception as e:
+        print(f"Error predict camera: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/train-image-classifier")
 async def train_image_classifier_route(dataset_path: str):
     try:
@@ -4272,6 +4994,100 @@ async def train_image_classifier_route(dataset_path: str):
         return {"success": True, "accuracy": result["accuracy"], "val_accuracy": result["val_accuracy"]}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+# ============ HELPER: FALLBACK CUACA LENGKAP SAAT AI TIDAK TERSEDIA ============
+def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: list, location_name: str, api_unavailable: bool = True) -> str:
+    """
+    Bangun pesan fallback cuaca ~100 kata bergaya santai-profesional ala teman tongkrongan.
+    Ditampilkan saat Gemini API tidak tersedia / kena rate limit.
+    """
+    temp      = int(weather.get('temperature', 0))
+    feels     = int(weather.get('feels_like', temp))
+    humidity  = int(weather.get('humidity', 0))
+    wind      = int(weather.get('wind_speed', 0))
+    pressure  = int(weather.get('pressure', 0))
+    precip    = weather.get('precipitation', 0)
+    uv        = weather.get('uv_index', 5)
+    code      = weather.get('weather_code', 0)
+
+    aqi        = air_quality.get('aqi', 0)
+    aqi_status = air_quality.get('status', 'Baik')
+    pm25       = air_quality.get('pm25', 0)
+
+    condition = get_condition_text(code)
+
+    # --- Emoji kondisi cuaca ---
+    if code == 0:
+        sky_emoji = "☀️"
+    elif code in (1, 2):
+        sky_emoji = "⛅"
+    elif code == 3:
+        sky_emoji = "☁️"
+    elif code in (45,):
+        sky_emoji = "🌫️"
+    elif code in (51, 53, 55, 61, 63, 80, 81):
+        sky_emoji = "🌧️"
+    elif code == 65:
+        sky_emoji = "⛈️"
+    elif code == 95:
+        sky_emoji = "⛈️"
+    else:
+        sky_emoji = "🌤️"
+
+    # --- Baris pembuka: maaf atau langsung ---
+    if api_unavailable:
+        opening = (
+            "Ups, asisten AI-nya lagi overload bentar nih 😅 "
+            "Tapi tenang, ini dia update cuaca terkini buat kamu!\n\n"
+        )
+    else:
+        opening = "Ini dia ringkasan cuaca terkini buat kamu!\n\n"
+
+    # --- Blok info utama ---
+    feel_desc = "gerah banget" if humidity > 80 else ("gerah" if humidity > 65 else ("sejuk" if temp < 26 else "cukup nyaman"))
+    main_info = (
+        f"{sky_emoji} {condition} di {location_name}\n"
+        f"Suhu {temp}°C (terasa {feels}°C), kelembaban {humidity}% — cuaca hari ini {feel_desc}.\n"
+        f"Angin {wind} km/j, tekanan udara {pressure} hPa."
+    )
+
+    # --- Curah hujan ---
+    rain_info = ""
+    if precip > 10:
+        rain_info = f"\n🌧️ Curah hujan hari ini lumayan deras nih, {precip:.1f} mm. Jangan lupa bawa payung!"
+    elif precip > 0:
+        rain_info = f"\n🌂 Ada potensi hujan ringan {precip:.1f} mm, antisipasi aja bawa payung kecil."
+
+    # --- UV ---
+    uv_info = ""
+    if uv >= 8:
+        uv_info = f"\n☀️ UV Index {uv:.0f} — ekstrem! Wajib sunscreen SPF 50+ dan hindari luar ruangan jam 10–14."
+    elif uv >= 6:
+        uv_info = f"\n☀️ UV Index {uv:.0f} — cukup tinggi. Sunscreen dan topi ya kalau mau keluar."
+    elif uv >= 3:
+        uv_info = f"\n🕶️ UV Index {uv:.0f} — moderat, tetap pakai sunscreen buat yang sensitif."
+
+    # --- Kualitas udara ---
+    aqi_emoji_map = {"Baik": "😊", "Sedang": "😐", "Tidak Sehat": "😷", "Sangat Tidak Sehat": "🤢", "Berbahaya": "☠️"}
+    aqi_emoji = aqi_emoji_map.get(aqi_status, "😐")
+    aqi_info = f"\n{aqi_emoji} Kualitas udara: {aqi_status} (AQI {aqi}, PM2.5 {pm25} µg/m³)."
+    if aqi > 150:
+        aqi_info += " Sebaiknya pakai masker kalau keluar ya!"
+    elif aqi > 100:
+        aqi_info += " Batasi aktivitas luar ruangan yang berat."
+
+    # --- Prakiraan besok (ambil index 1 dari forecast) ---
+    tomorrow_info = ""
+    if forecast and len(forecast) > 1:
+        tmr = forecast[1]
+        tmr_max  = int(tmr.get('temp_max', 0))
+        tmr_min  = int(tmr.get('temp_min', 0))
+        tmr_cond = get_condition_text(tmr.get('weather_code', 0))
+        tomorrow_info = f"\n📅 Besok: {tmr_cond}, {tmr_min}–{tmr_max}°C."
+
+    reply = opening + main_info + rain_info + uv_info + aqi_info + tomorrow_info
+    return reply
+
 
 # ============ AI CHAT ASHLEY ENDPOINT ============
 @app.post("/chat-ai")
@@ -4381,78 +5197,16 @@ JAWABAN:"""
                 # Validasi panjang response
                 if word_count < 1 or word_count > 500:
                     print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback")
-                    # Fallback pintar
-                    uv = weather.get('uv_index', 5)
-                    aqi = air_quality.get('aqi', 0)
-                    aqi_status = air_quality.get('status', 'Baik')
-                    temp = int(weather.get('temperature', 0))
-                    humidity = int(weather.get('humidity', 0))
-                    
-                    fallback_reply = f"Hai! 👋 Dengan suhu {temp}°C dan kelembaban {humidity}%, cuaca terasa {'gerah' if humidity > 70 else 'normal'}."
-                    
-                    if uv > 6:
-                        fallback_reply += f" UV Index {uv:.1f} cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
-                    
-                    if aqi > 100:
-                        fallback_reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). Sebaiknya pakai masker jika beraktivitas di luar."
-                    
-                    if "anak" in message_lower and ("main" in message_lower or "luar" in message_lower):
-                        if aqi > 100 or uv > 7:
-                            fallback_reply += " Untuk anak-anak, sebaiknya batasi bermain di luar karena UV tinggi dan kualitas udara tidak sehat. Jika terpaksa, pastikan pakai sunscreen, topi, dan masker, serta jangan lebih dari 30 menit ya! 🧒"
-                        else:
-                            fallback_reply += " Untuk anak-anak, masih cukup aman bermain di luar. Tapi tetap awasi dan jangan lupa pakai sunscreen serta minum yang cukup ya! 🧒☀️"
-                    
-                    reply = clean_markdown(fallback_reply)
+                    reply = _build_weather_fallback_reply(weather, air_quality, forecast, location_name, api_unavailable=False)
                 else:
                     # Bersihkan markdown dari response Gemini
                     reply = clean_markdown(response_text)
             else:
-                print("INFO:    Gemini returned None, menggunakan fallback")
-                # Fallback pintar
-                uv = weather.get('uv_index', 5)
-                aqi = air_quality.get('aqi', 0)
-                aqi_status = air_quality.get('status', 'Baik')
-                temp = int(weather.get('temperature', 0))
-                humidity = int(weather.get('humidity', 0))
-                
-                fallback_reply = f"Hai! 👋 Dengan suhu {temp}°C dan kelembaban {humidity}%, cuaca terasa {'gerah' if humidity > 70 else 'normal'}."
-                
-                if uv > 6:
-                    fallback_reply += f" UV Index {uv:.1f} cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
-                
-                if aqi > 100:
-                    fallback_reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). Sebaiknya pakai masker jika beraktivitas di luar."
-                
-                if "anak" in message_lower and ("main" in message_lower or "luar" in message_lower):
-                    if aqi > 100 or uv > 7:
-                        fallback_reply += " Untuk anak-anak, sebaiknya batasi bermain di luar karena UV tinggi dan kualitas udara tidak sehat. Jika terpaksa, pastikan pakai sunscreen, topi, dan masker, serta jangan lebih dari 30 menit ya! 🧒"
-                    else:
-                        fallback_reply += " Untuk anak-anak, masih cukup aman bermain di luar. Tapi tetap awasi dan jangan lupa pakai sunscreen serta minum yang cukup ya! 🧒☀️"
-                
-                reply = clean_markdown(fallback_reply)
+                print("INFO:    Gemini returned None / rate limit, menggunakan fallback cuaca lengkap")
+                reply = _build_weather_fallback_reply(weather, air_quality, forecast, location_name, api_unavailable=True)
         else:
             # Fallback AI tidak tersedia
-            uv = weather.get('uv_index', 5)
-            aqi = air_quality.get('aqi', 0)
-            aqi_status = air_quality.get('status', 'Baik')
-            temp = int(weather.get('temperature', 0))
-            humidity = int(weather.get('humidity', 0))
-            
-            fallback_reply = f"Hai! 👋 Dengan suhu {temp}°C dan kelembaban {humidity}%, cuaca terasa {'gerah' if humidity > 70 else 'normal'}."
-            
-            if uv > 6:
-                fallback_reply += f" UV Index {uv:.1f} cukup tinggi, jadi jangan lupa pakai sunscreen ya! ☀️"
-            
-            if aqi > 100:
-                fallback_reply += f" Perlu diperhatikan juga kualitas udara {aqi_status} (AQI {aqi}). Sebaiknya pakai masker jika beraktivitas di luar."
-            
-            if "anak" in message_lower and ("main" in message_lower or "luar" in message_lower):
-                if aqi > 100 or uv > 7:
-                    fallback_reply += " Untuk anak-anak, sebaiknya batasi bermain di luar karena UV tinggi dan kualitas udara tidak sehat. Jika terpaksa, pastikan pakai sunscreen, topi, dan masker, serta jangan lebih dari 30 menit ya! 🧒"
-                else:
-                    fallback_reply += " Untuk anak-anak, masih cukup aman bermain di luar. Tapi tetap awasi dan jangan lupa pakai sunscreen serta minum yang cukup ya! 🧒☀️"
-            
-            reply = clean_markdown(fallback_reply)
+            reply = _build_weather_fallback_reply(weather, air_quality, forecast, location_name, api_unavailable=True)
         
         # Pastikan reply tidak terpotong di tengah kalimat
         if reply and not reply[-1] in '.!?':
