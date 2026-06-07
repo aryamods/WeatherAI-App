@@ -24,7 +24,7 @@ import json
 import time
 import random
 from threading import Lock
-import re  # Untuk clean_markdown
+import re
 
 warnings.filterwarnings("ignore")
 
@@ -69,24 +69,23 @@ def clean_markdown(text: str) -> str:
     if not text:
         return text
     
-    # Hilangkan **tebal**
+
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     
-    # Hilangkan *miring*
+
     text = re.sub(r'\*(.+?)\*', r'\1', text)
     
-    # Hilangkan __tebal alternatif__
+
     text = re.sub(r'__(.+?)__', r'\1', text)
     
-    # Hilangkan `kode inline`
+
     text = re.sub(r'`(.+?)`', r'\1', text)
     
-    # Hilangkan [link](url) -> jadi "link"
+
     text = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', text)
     
     return text
 
-# ============ GEMINI API ROTATOR WITH RATE LIMIT HANDLING ============
 class GeminiRotator:
     def __init__(self, api_keys):
         """
@@ -107,14 +106,14 @@ class GeminiRotator:
         self.current_index = 0
         self.lock = Lock()
         self.last_reset = time.time()
-        self.daily_limit = 50  # Batas harian per key (free tier biasanya 50-60)
+        self.daily_limit = 50
         
         print(f"\033[92mINFO\033[0m:     Gemini Rotator initialized with {len(self.keys)} API keys")
     
     def _reset_daily_counter(self):
         """Reset counter harian setiap 24 jam"""
         now = time.time()
-        if now - self.last_reset > 86400:  # 24 jam
+        if now - self.last_reset > 86400:
             for key in self.keys:
                 key['used_today'] = 0
             self.last_reset = now
@@ -126,14 +125,14 @@ class GeminiRotator:
             self._reset_daily_counter()
             now = time.time()
             
-            # Filter key yang tidak dalam cooldown dan belum mencapai limit harian
+
             available = []
             for key in self.keys:
                 if key['cooldown_until'] <= now and key['used_today'] < self.daily_limit:
                     available.append(key)
             
             if not available:
-                # Jika semua key kena cooldown, cari yang paling cepat selesai
+
                 if self.keys:
                     min_cooldown = min(k['cooldown_until'] for k in self.keys)
                     wait_time = min_cooldown - now
@@ -188,20 +187,20 @@ class GeminiRotator:
                 print(f"⚠️ {key_info['account']} error: {error_msg[:100]}")
                 
                 if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                    # Rate limit, set cooldown
-                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)  # Max 5 menit
+
+                    cooldown_time = min(30 * (2 ** key_info['failures']), 300)
                     key_info['cooldown_until'] = time.time() + cooldown_time
                     key_info['failures'] += 1
                     print(f"   🔄 Cooldown for {cooldown_time} seconds")
                     
                 elif "quota" in error_msg.lower():
-                    # Quota habis, cooldown lebih lama
-                    key_info['cooldown_until'] = time.time() + 3600  # 1 jam
+
+                    key_info['cooldown_until'] = time.time() + 3600
                     key_info['failures'] += 1
                     print(f"   ⚠️ Quota exhausted, cooldown 1 hour")
                     
                 else:
-                    # Error lain, cooldown sebentar
+
                     key_info['cooldown_until'] = time.time() + 10
                 
                 if attempt < max_retries - 1:
@@ -227,7 +226,6 @@ class GeminiRotator:
             })
         return status
 
-# ============ INISIALISASI GEMINI ============
 AI_AVAILABLE = False
 gemini_rotator = None
 
@@ -367,7 +365,6 @@ def location_exists(name: str, latitude: float, longitude: float):
 
 init_db()
 
-# ============ FITUR TESTIMONIAL ============
 TESTIMONIALS_DB_PATH = "testimonials.db"
 
 def init_testimonials_db():
@@ -527,8 +524,7 @@ def get_current_weather(latitude: float, longitude: float):
         current = data.get("current", {})
         daily = data.get("daily", {})
         uv = daily.get("uv_index_max", [0])[0] if daily.get("uv_index_max") else 5
-        # Gunakan total hujan hari ini (precipitation_sum) agar konsisten dengan prakiraan 6 hari
-        # Fallback ke current precipitation jika tidak tersedia
+
         today_rain = daily.get("precipitation_sum", [None])[0]
         if today_rain is None:
             today_rain = current.get("precipitation", 0)
@@ -867,7 +863,6 @@ class WeatherPredictor:
             print(f"   Fold {fold_idx}: MAE={fold_mae:.3f} RMSE={fold_rmse:.3f} R²={fold_r2:.4f}")
             fold_idx += 1
 
-        # Latih final model dengan seluruh data
         self.model.fit(X, y)
 
         mae_avg  = round(float(np.mean([f["mae"]  for f in fold_results])), 6)
@@ -1344,7 +1339,6 @@ selected_location = {
     "timezone": "Asia/Jakarta",
 }
 
-# ============ RENDER PAGE FUNCTION ============
 def render_page(content: str, active: str = "home", message: str = None, message_type: str = None, saved_locations: list = None, selected_location: dict = None):
     message_html = ""
     if message:
@@ -1535,7 +1529,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         }}
 
         .custom-alert-btn.danger {{
-            background: linear-gradient(135deg, var(--danger), #dc2626);
+            background: linear-gradient(135deg, var(--danger),
             color: white;
         }}
 
@@ -1610,7 +1604,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             height: 48px;
             padding: 0 20px;
             background: white;
-            border: 1px solid #e2e8f0;
+            border: 1px solid
             border-radius: 99px;
             display: flex;
             align-items: center;
@@ -1621,19 +1615,19 @@ def render_page(content: str, active: str = "home", message: str = None, message
             box-shadow: 0 4px 16px rgba(0,0,0,0.1);
         }}
         body.dark .chat-toggle {{
-            background: #1e293b;
-            border-color: #334155;
+            background:
+            border-color:
         }}
         .chat-toggle:hover {{
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            border-color: #3b82f6;
+            border-color:
             transform: translateY(-2px);
         }}
         .chat-toggle-dot {{
             width: 9px;
             height: 9px;
             border-radius: 50%;
-            background: #10b981;
+            background:
             box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
             flex-shrink: 0;
             animation: chatDotBlink 2.5s ease infinite;
@@ -1645,15 +1639,15 @@ def render_page(content: str, active: str = "home", message: str = None, message
         .chat-toggle-text {{
             font-size: 14px;
             font-weight: 600;
-            color: #0f172a;
+            color:
             white-space: nowrap;
         }}
         body.dark .chat-toggle-text {{
-            color: #f1f5f9;
+            color:
         }}
         .chat-toggle-chevron {{
             font-size: 13px;
-            color: #94a3b8;
+            color:
             display: flex;
             align-items: center;
             transition: transform 0.3s ease;
@@ -1684,7 +1678,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             visibility: hidden;
         }}
         body.dark .chat-bubble {{
-            background: #1e293b;
+            background:
         }}
         .chat-bubble.open {{
             transform: translateX(0);
@@ -1696,15 +1690,15 @@ def render_page(content: str, active: str = "home", message: str = None, message
         .chat-header {{
             padding: 14px 18px;
             background: white;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid
             display: flex;
             align-items: center;
             gap: 12px;
             flex-shrink: 0;
         }}
         body.dark .chat-header {{
-            background: #1e293b;
-            border-bottom-color: #334155;
+            background:
+            border-bottom-color:
         }}
         .chat-header-bar {{
             width: 4px;
@@ -1722,13 +1716,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             height: 400%;
             background: repeating-linear-gradient(
                 to bottom,
-                #3b82f6 0%,
-                #6366f1 16.6%,
-                #a855f7 33.3%,
-                #ec4899 50%,
-                #a855f7 66.6%,
-                #6366f1 83.3%,
-                #3b82f6 100%
+
             );
             animation: chatBarFlow 2.5s linear infinite;
         }}
@@ -1762,41 +1750,41 @@ def render_page(content: str, active: str = "home", message: str = None, message
             font-size: 14px;
             font-weight: 700;
             margin: 0;
-            color: #0f172a;
+            color:
         }}
         body.dark .chat-header-info h4 {{
-            color: #f1f5f9;
+            color:
         }}
         .chat-header-info p {{
             font-size: 11px;
-            color: #10b981;
+            color:
             margin: 2px 0 0;
         }}
         .chat-close {{
             width: 28px;
             height: 28px;
-            background: #f1f5f9;
+            background:
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: all 0.2s ease;
-            color: #64748b;
+            color:
             font-size: 13px;
         }}
         body.dark .chat-close {{
-            background: #334155;
-            color: #94a3b8;
+            background:
+            color:
         }}
         .chat-close:hover {{
-            background: #e2e8f0;
-            color: #0f172a;
+            background:
+            color:
             transform: rotate(90deg);
         }}
         body.dark .chat-close:hover {{
-            background: #475569;
-            color: #f1f5f9;
+            background:
+            color:
         }}
 
         /* Chat Messages */
@@ -1834,7 +1822,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
             color: white;
         }}
         .chat-message.user .chat-avatar {{
-            background: #3b82f6;
+            background:
             color: white;
         }}
         .chat-bubble-text {{
@@ -1845,18 +1833,18 @@ def render_page(content: str, active: str = "home", message: str = None, message
             word-wrap: break-word;
         }}
         .chat-message.bot .chat-bubble-text {{
-            background: #ffffff;
-            color: #0f172a;
+            background:
+            color:
             border-top-left-radius: 4px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid
         }}
         body.dark .chat-message.bot .chat-bubble-text {{
-            background: #1e293b;
-            color: #f1f5f9;
-            border-color: #334155;
+            background:
+            color:
+            border-color:
         }}
         .chat-message.user .chat-bubble-text {{
-            background: #3b82f6;
+            background:
             color: white;
             border-top-right-radius: 4px;
         }}
@@ -1864,7 +1852,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
         /* Typing Indicator */
 
         /* Kursor berkedip - default (tidak mengetik) */
-
 
         /* Sound wave di avatar bubble chat - saat Ashley mengetik */
         .sound-wave-avatar {{
@@ -1883,7 +1870,7 @@ def render_page(content: str, active: str = "home", message: str = None, message
         .sound-wave-avatar .sbar {{
             width: 3px;
             border-radius: 3px;
-            background: linear-gradient(180deg, #e879f9, #2dd4bf);
+            background: linear-gradient(180deg,
             animation: sbarPulse 0.8s ease-in-out infinite;
             transform-origin: center;
         }}
@@ -1902,15 +1889,15 @@ def render_page(content: str, active: str = "home", message: str = None, message
             width: 4px;
         }}
         .chat-messages::-webkit-scrollbar-track {{
-            background: #e2e8f0;
+            background:
             border-radius: 10px;
         }}
         .chat-messages::-webkit-scrollbar-thumb {{
-            background: #3b82f6;
+            background:
             border-radius: 10px;
         }}
         body.dark .chat-messages::-webkit-scrollbar-track {{
-            background: #1e293b;
+            background:
         }}
 
         @media (max-width: 768px) {{
@@ -3101,8 +3088,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
     let currentTypingTimeout = null;
     let typingStopTimeout = null;
 
-
-
     function toggleChat() {{
         const bubble = document.getElementById('chatBubble');
         const btn = document.getElementById('chatToggle');
@@ -3351,7 +3336,6 @@ def render_page(content: str, active: str = "home", message: str = None, message
 </html>"""
     return html_content
 
-# ============ ROUTE HOME ============
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     global selected_location
@@ -3506,7 +3490,6 @@ async def home(request: Request):
 
     return HTMLResponse(content=render_page(content, active="home", saved_locations=saved_locations, selected_location=selected_location))
 
-# ============ ROUTE MAIN (ML) ============
 @app.get("/main", response_class=HTMLResponse)
 async def ml_dashboard(request: Request):
     global selected_location
@@ -3562,23 +3545,23 @@ async def ml_dashboard(request: Request):
             bar_w   = min(int(r2_pct), 100)
             best_r2 = max((x['r2'] for x in fold_results), default=0)
             if f['r2'] == best_r2:
-                status_html = '<span style="background:#1D9E75;color:#E1F5EE;font-size:11px;padding:2px 10px;border-radius:6px;font-weight:600;">Terbaik</span>'
+                status_html = '<span style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.35);font-size:11px;padding:2px 10px;border-radius:6px;font-weight:600;">Terbaik</span>'
                 fold_num_style = "background:#8b5cf6;color:#fff;"
             elif f['r2'] >= 0.95:
-                status_html = '<span style="background:#0F6E56;color:#9FE1CB;font-size:11px;padding:2px 10px;border-radius:6px;">Baik</span>'
+                status_html = '<span style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);font-size:11px;padding:2px 10px;border-radius:6px;">Baik</span>'
                 fold_num_style = "background:rgba(139,92,246,0.15);color:#8b5cf6;"
             else:
-                status_html = '<span style="background:#854F0B;color:#FAC775;font-size:11px;padding:2px 10px;border-radius:6px;">Cukup</span>'
+                status_html = '<span style="background:rgba(245,158,11,0.12);color:#d97706;border:1px solid rgba(245,158,11,0.3);font-size:11px;padding:2px 10px;border-radius:6px;">Cukup</span>'
                 fold_num_style = "background:rgba(139,92,246,0.1);color:#8b5cf6;"
 
             fold_rows_html += f"""
             <tr style="border-bottom:1px solid rgba(139,92,246,0.1);">
                 <td style="padding:10px 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:600;{fold_num_style}">{f['fold']}</span></td>
-                <td style="padding:10px 8px;color:rgba(255,255,255,0.5);font-size:13px;">{f['train_size']}</td>
-                <td style="padding:10px 8px;color:rgba(255,255,255,0.5);font-size:13px;">{f['test_size']}</td>
-                <td style="padding:10px 8px;font-weight:600;color:#c4b5fd;">{f['mae']:.3f}</td>
-                <td style="padding:10px 8px;font-weight:600;color:#c4b5fd;">{f['rmse']:.3f}</td>
-                <td style="padding:10px 8px;font-weight:600;color:#c4b5fd;">{f['r2']:.3f}</td>
+                <td class="ml-fold-td-muted" style="padding:10px 8px;">{f['train_size']}</td>
+                <td class="ml-fold-td-muted" style="padding:10px 8px;">{f['test_size']}</td>
+                <td class="ml-fold-td-value" style="padding:10px 8px;">{f['mae']:.3f}</td>
+                <td class="ml-fold-td-value" style="padding:10px 8px;">{f['rmse']:.3f}</td>
+                <td class="ml-fold-td-value" style="padding:10px 8px;">{f['r2']:.3f}</td>
                 <td style="padding:10px 8px;min-width:120px;">
                     <div style="background:rgba(139,92,246,0.15);border-radius:4px;height:8px;overflow:hidden;">
                         <div style="width:{bar_w}%;height:100%;background:#8b5cf6;border-radius:4px;"></div>
@@ -3600,25 +3583,25 @@ async def ml_dashboard(request: Request):
         fold_section = ""
         if fold_results:
             fold_section = f"""
-            <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:20px;margin-bottom:20px;">
+            <div class="ml-fold-section">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                    <span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.9);display:flex;align-items:center;gap:8px;">
+                    <span class="ml-fold-section-title">
                         <i class="fas fa-layer-group" style="color:#8b5cf6;"></i> Hasil per fold ({n_folds}-fold cross-validation)
                     </span>
-                    <span style="background:rgba(139,92,246,0.25);color:#c4b5fd;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;">{n_folds} Fold</span>
+                    <span style="background:rgba(139,92,246,0.15);color:#8b5cf6;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;border:1px solid rgba(139,92,246,0.25);">{n_folds} Fold</span>
                 </div>
                 <div style="overflow-x:auto;">
                 <table class="ml-fold-table">
                     <thead>
-                        <tr style="border-bottom:1px solid rgba(139,92,246,0.3);">
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Fold</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Train</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Test</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">MAE</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">RMSE</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">R²</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Akurasi R²</th>
-                            <th style="padding:8px 8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;">Status</th>
+                        <tr style="border-bottom:1px solid rgba(139,92,246,0.25);">
+                            <th style="padding:8px 8px;text-align:left;">Fold</th>
+                            <th style="padding:8px 8px;text-align:left;">Train</th>
+                            <th style="padding:8px 8px;text-align:left;">Test</th>
+                            <th style="padding:8px 8px;text-align:left;">MAE</th>
+                            <th style="padding:8px 8px;text-align:left;">RMSE</th>
+                            <th style="padding:8px 8px;text-align:left;">R²</th>
+                            <th style="padding:8px 8px;text-align:left;">Akurasi R²</th>
+                            <th style="padding:8px 8px;text-align:left;">Status</th>
                         </tr>
                     </thead>
                     <tbody>{fold_rows_html}</tbody>
@@ -3627,23 +3610,23 @@ async def ml_dashboard(request: Request):
             </div>
 
             <div class="ml-chart-grid">
-                <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:16px;min-width:0;overflow:hidden;">
-                    <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <div class="ml-chart-card">
+                    <div class="ml-chart-title">
                         <i class="fas fa-chart-line" style="color:#8b5cf6;font-size:14px;flex-shrink:0;"></i> MAE &amp; RMSE per fold
                     </div>
                     <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
-                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></span>MAE</span>
-                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1D9E75;flex-shrink:0;"></span>RMSE</span>
+                        <span class="ml-chart-legend-text"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></span>MAE</span>
+                        <span class="ml-chart-legend-text"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1D9E75;flex-shrink:0;"></span>RMSE</span>
                     </div>
                     <div style="position:relative;height:150px;width:100%;"><canvas id="maeRmseChart" role="img" aria-label="MAE dan RMSE per fold"></canvas></div>
                 </div>
-                <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:16px;min-width:0;overflow:hidden;">
-                    <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <div class="ml-chart-card">
+                    <div class="ml-chart-title">
                         <i class="fas fa-chart-bar" style="color:#8b5cf6;font-size:14px;flex-shrink:0;"></i> R² score per fold
                     </div>
                     <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
-                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></span>R² score</span>
-                        <span style="font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E24B4A;flex-shrink:0;"></span>Threshold 0.90</span>
+                        <span class="ml-chart-legend-text"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></span>R² score</span>
+                        <span class="ml-chart-legend-text"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E24B4A;flex-shrink:0;"></span>Threshold 0.90</span>
                     </div>
                     <div style="position:relative;height:150px;width:100%;"><canvas id="r2FoldChart" role="img" aria-label="R² per fold"></canvas></div>
                 </div>
@@ -3656,6 +3639,10 @@ async def ml_dashboard(request: Request):
                 var rmseData= {fold_rmse_js};
                 var r2Data  = {fold_r2_js};
 
+                var isDark = document.body.classList.contains('dark');
+                var tickColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(100,116,139,0.7)';
+                var gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(100,116,139,0.12)';
+
                 if(typeof Chart !== 'undefined'){{
                     new Chart(document.getElementById('maeRmseChart'), {{
                         type:'line',
@@ -3667,8 +3654,8 @@ async def ml_dashboard(request: Request):
                             ]
                         }},
                         options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{
-                            y:{{ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)',callback:function(v){{return v.toFixed(2);}}}},grid:{{color:'rgba(255,255,255,0.05)'}}}},
-                            x:{{ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)'}},grid:{{display:false}}}}
+                            y:{{ticks:{{font:{{size:10}},color:tickColor,callback:function(v){{return v.toFixed(2);}}}},grid:{{color:gridColor}}}},
+                            x:{{ticks:{{font:{{size:10}},color:tickColor}},grid:{{display:false}}}}
                         }}}}
                     }});
                     var r2min = Math.min.apply(null,r2Data)-0.01;
@@ -3683,8 +3670,8 @@ async def ml_dashboard(request: Request):
                             ]
                         }},
                         options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{
-                            y:{{min:Math.min(r2min,0.89),max:r2max,ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)',callback:function(v){{return v.toFixed(3);}}}},grid:{{color:'rgba(255,255,255,0.05)'}}}},
-                            x:{{ticks:{{font:{{size:10}},color:'rgba(255,255,255,0.4)'}},grid:{{display:false}}}}
+                            y:{{min:Math.min(r2min,0.89),max:r2max,ticks:{{font:{{size:10}},color:tickColor,callback:function(v){{return v.toFixed(3);}}}},grid:{{color:gridColor}}}},
+                            x:{{ticks:{{font:{{size:10}},color:tickColor}},grid:{{display:false}}}}
                         }}}}
                     }});
                 }}
@@ -3699,36 +3686,36 @@ async def ml_dashboard(request: Request):
             </div>
 
             <div class="ml-metric-grid">
-                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
-                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">MAE rata-rata ({n_folds}-fold)</div>
-                    <div style="font-size:20px;font-weight:700;color:#1D9E75;">{mae_display}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">±{mae_std_disp} std dev</div>
+                <div class="ml-metric-card">
+                    <div class="ml-metric-label">MAE rata-rata ({n_folds}-fold)</div>
+                    <div style="font-size:20px;font-weight:700;color:var(--success);">{mae_display}</div>
+                    <div class="ml-metric-sublabel">±{mae_std_disp} std dev</div>
                 </div>
-                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
-                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">R² rata-rata ({n_folds}-fold)</div>
-                    <div style="font-size:20px;font-weight:700;color:#1D9E75;">{r2_display}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">±{r2_std_disp} std dev</div>
+                <div class="ml-metric-card">
+                    <div class="ml-metric-label">R² rata-rata ({n_folds}-fold)</div>
+                    <div style="font-size:20px;font-weight:700;color:var(--success);">{r2_display}</div>
+                    <div class="ml-metric-sublabel">±{r2_std_disp} std dev</div>
                 </div>
-                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
-                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">RMSE rata-rata</div>
-                    <div style="font-size:20px;font-weight:700;color:#c4b5fd;">{rmse_display}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Root Mean Squared Error</div>
+                <div class="ml-metric-card">
+                    <div class="ml-metric-label">RMSE rata-rata</div>
+                    <div style="font-size:20px;font-weight:700;color:#8b5cf6;">{rmse_display}</div>
+                    <div class="ml-metric-sublabel">Root Mean Squared Error</div>
                 </div>
-                <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:14px;">
-                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">MAPE rata-rata</div>
-                    <div style="font-size:20px;font-weight:700;color:#1D9E75;">{mape_display}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Mean Abs. % Error</div>
+                <div class="ml-metric-card">
+                    <div class="ml-metric-label">MAPE rata-rata</div>
+                    <div style="font-size:20px;font-weight:700;color:var(--success);">{mape_display}</div>
+                    <div class="ml-metric-sublabel">Mean Abs. % Error</div>
                 </div>
             </div>
 
             {fold_section}
 
-            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:12px;padding:12px 16px;margin-bottom:20px;">
+            <div class="ml-location-bar">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <i class="fas fa-map-marker-alt" style="color:#8b5cf6;"></i>
-                    <span style="font-size:12px;color:rgba(255,255,255,0.5);">Lokasi Training</span>
+                    <span class="ml-location-label">Lokasi Training</span>
                 </div>
-                <span style="font-size:14px;font-weight:600;color:#c4b5fd;">{model_info['location']}</span>
+                <span class="ml-location-value">{model_info['location']}</span>
             </div>
 
             <form method="GET" action="/train-model" style="margin-top:4px;" id="trainForm">
@@ -3760,7 +3747,7 @@ async def ml_dashboard(request: Request):
                 </p>
                 <form method="GET" action="/train-model" id="trainForm">
                     <button type="submit" class="train-btn-ml" style="
-                        background: linear-gradient(135deg, #8b5cf6, #a855f7, #c084fc);
+                        background: linear-gradient(135deg,
                         border: none; border-radius: 50px; padding: 14px 36px;
                         color: white; font-weight: 700; font-size: 14px;
                         cursor: pointer; transition: all 0.3s ease;
@@ -3842,14 +3829,14 @@ async def ml_dashboard(request: Request):
                     <!-- Live badge -->
                     <div id="liveBadge" style="
                         display: none; position: absolute; top: 10px; left: 10px;
-                        background: #ef4444; color: white; font-size: 11px;
+                        background:
                         font-weight: 700; padding: 3px 10px; border-radius: 20px;
                         letter-spacing: 1px;
                     ">&#9679; LIVE</div>
                     <!-- Auto detect badge -->
                     <div id="autoDetectBadge" style="
                         display: none; position: absolute; top: 10px; right: 10px;
-                        background: rgba(0,0,0,0.6); color: #34d399; font-size: 11px;
+                        background: rgba(0,0,0,0.6); color:
                         font-weight: 600; padding: 3px 10px; border-radius: 20px;
                     ">AUTO DETECT ON</div>
                 </div>
@@ -3865,21 +3852,21 @@ async def ml_dashboard(request: Request):
                     </button>
                     <button id="captureBtn" onclick="captureAndPredict()" style="
                         padding: 9px 18px; border: none; border-radius: 12px;
-                        background: #10b981; color: white; font-size: 13px;
+                        background:
                         font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px;
                     ">
                         <i class="fas fa-camera"></i> Foto & Deteksi
                     </button>
                     <button id="autoDetectBtn" onclick="toggleAutoDetect()" style="
                         padding: 9px 18px; border: none; border-radius: 12px;
-                        background: #6b7280; color: white; font-size: 13px;
+                        background:
                         font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px;
                     ">
                         <i class="fas fa-sync-alt"></i> Auto Detect
                     </button>
                     <button id="stopCameraBtn" onclick="stopCamera()" style="
                         padding: 9px 18px; border: none; border-radius: 12px;
-                        background: #ef4444; color: white; font-size: 13px;
+                        background:
                         font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px;
                     ">
                         <i class="fas fa-stop"></i> Stop
@@ -3920,12 +3907,74 @@ async def ml_dashboard(request: Request):
 
     content = f"""
     <style>
+        /* ====== ML PAGE THEME-AWARE VARIABLES ====== */
+        :root {{
+            --ml-label-color: rgba(100,116,139,0.9);
+            --ml-sublabel-color: rgba(100,116,139,0.7);
+            --ml-table-text: rgba(30,41,59,0.85);
+            --ml-table-header: rgba(100,116,139,0.75);
+            --ml-table-border: rgba(139,92,246,0.2);
+            --ml-card-bg: rgba(139,92,246,0.07);
+            --ml-card-border: rgba(139,92,246,0.18);
+            --ml-fc-day-color: rgba(100,116,139,0.7);
+            --ml-fc-date-color:
+            --ml-fc-temp-max:
+            --ml-fc-temp-min: rgba(100,116,139,0.7);
+            --ml-fc-precip-color:
+            --ml-fc-precip-bg: rgba(37,99,235,0.08);
+            --ml-datetime-label: rgba(100,116,139,0.65);
+            --ml-datetime-sub:
+            --ml-chart-tick: rgba(100,116,139,0.6);
+            --ml-chart-grid: rgba(100,116,139,0.1);
+            --ml-location-label: rgba(100,116,139,0.7);
+            --ml-location-value:
+            --ml-fold-value:
+        }}
+        body.dark {{
+            --ml-label-color: rgba(255,255,255,0.5);
+            --ml-sublabel-color: rgba(255,255,255,0.35);
+            --ml-table-text: rgba(255,255,255,0.85);
+            --ml-table-header: rgba(255,255,255,0.5);
+            --ml-table-border: rgba(139,92,246,0.2);
+            --ml-card-bg: rgba(139,92,246,0.08);
+            --ml-card-border: rgba(139,92,246,0.2);
+            --ml-fc-day-color: rgba(255,255,255,0.5);
+            --ml-fc-date-color: rgba(196,181,253,0.85);
+            --ml-fc-temp-max:
+            --ml-fc-temp-min: rgba(255,255,255,0.4);
+            --ml-fc-precip-color: rgba(96,165,250,0.9);
+            --ml-fc-precip-bg: rgba(96,165,250,0.1);
+            --ml-datetime-label: rgba(255,255,255,0.4);
+            --ml-datetime-sub: rgba(196,181,253,0.7);
+            --ml-chart-tick: rgba(255,255,255,0.4);
+            --ml-chart-grid: rgba(255,255,255,0.05);
+            --ml-location-label: rgba(255,255,255,0.5);
+            --ml-location-value:
+            --ml-fold-value:
+        }}
+
         /* ====== ML PAGE RESPONSIVE STYLES ====== */
         .ml-metric-grid {{
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 12px;
             margin-bottom: 20px;
+        }}
+        .ml-metric-card {{
+            background: var(--ml-card-bg);
+            border: 1px solid var(--ml-card-border);
+            border-radius: 12px;
+            padding: 14px;
+        }}
+        .ml-metric-label {{
+            font-size: 11px;
+            color: var(--ml-label-color);
+            margin-bottom: 4px;
+        }}
+        .ml-metric-sublabel {{
+            font-size: 11px;
+            color: var(--ml-sublabel-color);
+            margin-top: 2px;
         }}
         .ml-chart-grid {{
             display: grid;
@@ -3938,9 +3987,51 @@ async def ml_dashboard(request: Request):
             min-width: 0;
             overflow: hidden;
         }}
-        .ml-fold-table {{ width:100%;border-collapse:collapse;font-size:13px;color:rgba(255,255,255,0.85); }}
-        .ml-fold-table th {{ padding:8px;text-align:left;font-size:11px;color:rgba(255,255,255,0.5);font-weight:500;border-bottom:1px solid rgba(139,92,246,0.3);white-space:nowrap; }}
+        .ml-chart-card {{
+            background: var(--ml-card-bg);
+            border: 1px solid var(--ml-card-border);
+            border-radius: 16px;
+            padding: 16px;
+            min-width: 0;
+            overflow: hidden;
+        }}
+        .ml-chart-title {{
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }}
+        .ml-chart-legend-text {{
+            font-size: 11px;
+            color: var(--ml-label-color);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }}
+        .ml-fold-section {{
+            background: var(--ml-card-bg);
+            border: 1px solid var(--ml-card-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }}
+        .ml-fold-section-title {{
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .ml-fold-table {{ width:100%;border-collapse:collapse;font-size:13px;color:var(--ml-table-text); }}
+        .ml-fold-table th {{ padding:8px;text-align:left;font-size:11px;color:var(--ml-table-header);font-weight:500;border-bottom:1px solid var(--ml-table-border);white-space:nowrap; }}
         .ml-fold-table td {{ padding:10px 8px;border-bottom:1px solid rgba(139,92,246,0.1);white-space:nowrap; }}
+        .ml-fold-td-muted {{ color:var(--ml-label-color);font-size:13px; }}
+        .ml-fold-td-value {{ font-weight:600;color:var(--ml-fold-value); }}
 
         /* ====== FORECAST CARD CANTIK ====== */
         .ml-forecast-scroll {{
@@ -3950,8 +4041,8 @@ async def ml_dashboard(request: Request):
             padding: 4px 0 8px;
         }}
         .ml-forecast-card {{
-            background: linear-gradient(145deg, rgba(139,92,246,0.13), rgba(99,102,241,0.08));
-            border: 1px solid rgba(139,92,246,0.22);
+            background: var(--ml-card-bg);
+            border: 1px solid var(--ml-card-border);
             border-radius: 18px;
             padding: 14px 10px;
             text-align: center;
@@ -3964,24 +4055,24 @@ async def ml_dashboard(request: Request):
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(135deg, rgba(139,92,246,0.07) 0%, transparent 60%);
+            background: linear-gradient(135deg, rgba(139,92,246,0.06) 0%, transparent 60%);
             border-radius: inherit;
             pointer-events: none;
         }}
         .ml-forecast-card:hover {{
             transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(139,92,246,0.25);
+            box-shadow: 0 8px 24px rgba(139,92,246,0.22);
             border-color: rgba(139,92,246,0.45);
         }}
         .ml-forecast-card.today {{
-            background: linear-gradient(145deg, rgba(139,92,246,0.25), rgba(99,102,241,0.18));
-            border-color: rgba(139,92,246,0.5);
-            box-shadow: 0 4px 16px rgba(139,92,246,0.2);
+            background: linear-gradient(145deg, rgba(139,92,246,0.18), rgba(99,102,241,0.12));
+            border-color: rgba(139,92,246,0.45);
+            box-shadow: 0 4px 16px rgba(139,92,246,0.18);
         }}
         .ml-fc-day {{
             font-size: 11px;
             font-weight: 700;
-            color: rgba(255,255,255,0.5);
+            color: var(--ml-fc-day-color);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 2px;
@@ -3989,24 +4080,24 @@ async def ml_dashboard(request: Request):
         .ml-fc-date {{
             font-size: 12px;
             font-weight: 600;
-            color: rgba(196,181,253,0.85);
+            color: var(--ml-fc-date-color);
             margin-bottom: 8px;
         }}
         .ml-fc-icon {{
             font-size: 22px;
             margin-bottom: 6px;
-            color: #8b5cf6;
+            color:
         }}
         .ml-fc-temp-max {{
             font-size: 20px;
             font-weight: 800;
-            color: #f0f0ff;
+            color: var(--ml-fc-temp-max);
             line-height: 1;
         }}
         .ml-fc-temp-min {{
             font-size: 13px;
             font-weight: 500;
-            color: rgba(255,255,255,0.4);
+            color: var(--ml-fc-temp-min);
             margin-top: 2px;
         }}
         .ml-fc-precip {{
@@ -4014,9 +4105,9 @@ async def ml_dashboard(request: Request):
             align-items: center;
             gap: 4px;
             font-size: 11px;
-            color: rgba(96,165,250,0.9);
+            color: var(--ml-fc-precip-color);
             margin-top: 6px;
-            background: rgba(96,165,250,0.1);
+            background: var(--ml-fc-precip-bg);
             padding: 2px 8px;
             border-radius: 20px;
         }}
@@ -4026,13 +4117,34 @@ async def ml_dashboard(request: Request):
             gap: 3px;
             font-size: 9px;
             font-weight: 700;
-            color: rgba(196,181,253,0.8);
-            background: rgba(139,92,246,0.18);
-            border: 1px solid rgba(139,92,246,0.3);
+            color: var(--ml-fc-date-color);
+            background: rgba(139,92,246,0.12);
+            border: 1px solid rgba(139,92,246,0.25);
             padding: 2px 7px;
             border-radius: 20px;
             margin-top: 6px;
             letter-spacing: 0.3px;
+        }}
+
+        /* ====== LOCATION INFO BAR ====== */
+        .ml-location-bar {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--ml-card-bg);
+            border: 1px solid var(--ml-card-border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }}
+        .ml-location-label {{
+            font-size: 12px;
+            color: var(--ml-location-label);
+        }}
+        .ml-location-value {{
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--ml-location-value);
         }}
 
         /* ====== BOTTOM BENTO GRID ====== */
@@ -4052,8 +4164,8 @@ async def ml_dashboard(request: Request):
             display: flex;
             align-items: center;
             gap: 16px;
-            background: rgba(139,92,246,0.08);
-            border: 1px solid rgba(139,92,246,0.15);
+            background: var(--ml-card-bg);
+            border: 1px solid var(--ml-card-border);
             border-radius: 16px;
             padding: 16px;
         }}
@@ -4061,7 +4173,7 @@ async def ml_dashboard(request: Request):
             width: 44px;
             height: 44px;
             border-radius: 12px;
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            background: linear-gradient(135deg,
             display: flex;
             align-items: center;
             justify-content: center;
@@ -4072,7 +4184,7 @@ async def ml_dashboard(request: Request):
         .ml-datetime-label {{
             font-size: 11px;
             font-weight: 600;
-            color: rgba(255,255,255,0.4);
+            color: var(--ml-datetime-label);
             text-transform: uppercase;
             letter-spacing: 0.8px;
             margin-bottom: 4px;
@@ -4085,7 +4197,7 @@ async def ml_dashboard(request: Request):
         }}
         .ml-datetime-sub {{
             font-size: 12px;
-            color: rgba(196,181,253,0.7);
+            color: var(--ml-datetime-sub);
             margin-top: 2px;
         }}
 
@@ -4178,7 +4290,6 @@ async def ml_dashboard(request: Request):
 
     return HTMLResponse(content=render_page(content, active="ml", saved_locations=saved_locations, selected_location=selected_location))
 
-# ============ ROUTE TULIS ULASAN ============
 @app.get("/ulasan", response_class=HTMLResponse)
 async def ulasan_page(request: Request, message: str = None, type: str = None):
     saved_locations = get_saved_locations()
@@ -4194,16 +4305,16 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
         .rating-star {{
             font-size: 48px;
             cursor: pointer;
-            color: #cbd5e1;
+            color:
             transition: all 0.2s ease;
         }}
         .rating-star:hover,
         .rating-star.active {{
-            color: #fbbf24;
+            color:
             transform: scale(1.1);
         }}
         .rating-star.selected {{
-            color: #fbbf24;
+            color:
         }}
         .char-counter {{
             text-align: right;
@@ -4212,10 +4323,10 @@ async def ulasan_page(request: Request, message: str = None, type: str = None):
             margin-top: 8px;
         }}
         .char-counter.warning {{
-            color: #f59e0b;
+            color:
         }}
         .char-counter.danger {{
-            color: #ef4444;
+            color:
         }}
         .review-form {{
             max-width: 600px;
@@ -4395,7 +4506,6 @@ async def submit_ulasan(name: str = Form(...), role: str = Form(...), comment: s
     save_testimonial(name, role, comment, rating)
     return RedirectResponse(url="/ulasan?message=Terima kasih! Ulasan Anda telah disimpan&type=success", status_code=303)
 
-# ============ ROUTE VERIFY DELETE TESTIMONIAL ============
 @app.post("/verify-delete-testimonial/{testimonial_id}")
 async def verify_delete_testimonial(testimonial_id: int, request: PasswordRequest):
     if not ADMIN_PASSWORD:
@@ -4407,7 +4517,6 @@ async def verify_delete_testimonial(testimonial_id: int, request: PasswordReques
     else:
         return {"success": False, "message": "Password salah!"}
 
-# ============ ROUTE SEARCH ============
 @app.get("/search", response_class=HTMLResponse)
 async def search_page(request: Request, message: str = None, type: str = None):
     saved_locations = get_saved_locations()
@@ -4559,7 +4668,6 @@ async def search_coords_post(latitude: float = Form(...), longitude: float = For
     else:
         return RedirectResponse(url=f"/search?message=Gagal mendapatkan informasi dari koordinat ({latitude}, {longitude}). Periksa kembali koordinat Anda.&type=error", status_code=303)
 
-# ============ ROUTE ABOUT ============
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request, message: str = None, type: str = None):
     saved_locations = get_saved_locations()
@@ -4840,7 +4948,6 @@ async def about_page(request: Request, message: str = None, type: str = None):
 
     return HTMLResponse(content=render_page(content, active="about", saved_locations=saved_locations, message=message, message_type=type))
 
-# ============ ROUTE LOCATION ============
 @app.get("/select-location/{location_id}")
 async def select_location(location_id: int):
     global selected_location
@@ -4870,7 +4977,6 @@ async def delete_location_route(location_id: int):
     delete_location(location_id)
     return RedirectResponse(url="/?message=Lokasi berhasil dihapus&type=success", status_code=303)
 
-# ============ ROUTE TRAIN MODEL ============
 @app.get("/train-model")
 async def train_model_route(request: Request):
     global selected_location
@@ -4894,7 +5000,6 @@ async def train_model_route(request: Request):
             return {"success": False, "error": str(e)}
         return RedirectResponse(url=f"/main?message=Gagal melatih model: {str(e)}&type=error", status_code=303)
 
-# ============ ROUTE DOWNLOAD CNN MODEL ============
 @app.post("/download-cnn-model")
 async def download_cnn_model():
     try:
@@ -4919,7 +5024,6 @@ async def download_cnn_model():
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
-# ============ ROUTE PREDICT IMAGE ============
 @app.post("/predict-weather-image")
 async def predict_weather_from_image(file: UploadFile = File(...)):
     try:
@@ -4957,7 +5061,7 @@ async def predict_weather_from_camera(request: Request):
         if not image_data:
             return {"success": False, "error": "Tidak ada data gambar"}
         
-        # Strip data URL prefix jika ada
+
         if "," in image_data:
             image_data = image_data.split(",")[1]
         
@@ -4995,7 +5099,6 @@ async def train_image_classifier_route(dataset_path: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ============ HELPER: FALLBACK CUACA LENGKAP SAAT AI TIDAK TERSEDIA ============
 def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: list, location_name: str, api_unavailable: bool = True) -> str:
     """
     Bangun pesan fallback cuaca ~100 kata bergaya santai-profesional ala teman tongkrongan.
@@ -5016,7 +5119,6 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
 
     condition = get_condition_text(code)
 
-    # --- Emoji kondisi cuaca ---
     if code == 0:
         sky_emoji = "☀️"
     elif code in (1, 2):
@@ -5034,7 +5136,6 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
     else:
         sky_emoji = "🌤️"
 
-    # --- Baris pembuka: maaf atau langsung ---
     if api_unavailable:
         opening = (
             "Ups, asisten AI-nya lagi overload bentar nih 😅 "
@@ -5043,7 +5144,6 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
     else:
         opening = "Ini dia ringkasan cuaca terkini buat kamu!\n\n"
 
-    # --- Blok info utama ---
     feel_desc = "gerah banget" if humidity > 80 else ("gerah" if humidity > 65 else ("sejuk" if temp < 26 else "cukup nyaman"))
     main_info = (
         f"{sky_emoji} {condition} di {location_name}\n"
@@ -5051,14 +5151,12 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
         f"Angin {wind} km/j, tekanan udara {pressure} hPa."
     )
 
-    # --- Curah hujan ---
     rain_info = ""
     if precip > 10:
         rain_info = f"\n🌧️ Curah hujan hari ini lumayan deras nih, {precip:.1f} mm. Jangan lupa bawa payung!"
     elif precip > 0:
         rain_info = f"\n🌂 Ada potensi hujan ringan {precip:.1f} mm, antisipasi aja bawa payung kecil."
 
-    # --- UV ---
     uv_info = ""
     if uv >= 8:
         uv_info = f"\n☀️ UV Index {uv:.0f} — ekstrem! Wajib sunscreen SPF 50+ dan hindari luar ruangan jam 10–14."
@@ -5067,7 +5165,6 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
     elif uv >= 3:
         uv_info = f"\n🕶️ UV Index {uv:.0f} — moderat, tetap pakai sunscreen buat yang sensitif."
 
-    # --- Kualitas udara ---
     aqi_emoji_map = {"Baik": "😊", "Sedang": "😐", "Tidak Sehat": "😷", "Sangat Tidak Sehat": "🤢", "Berbahaya": "☠️"}
     aqi_emoji = aqi_emoji_map.get(aqi_status, "😐")
     aqi_info = f"\n{aqi_emoji} Kualitas udara: {aqi_status} (AQI {aqi}, PM2.5 {pm25} µg/m³)."
@@ -5076,7 +5173,6 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
     elif aqi > 100:
         aqi_info += " Batasi aktivitas luar ruangan yang berat."
 
-    # --- Prakiraan besok (ambil index 1 dari forecast) ---
     tomorrow_info = ""
     if forecast and len(forecast) > 1:
         tmr = forecast[1]
@@ -5088,8 +5184,6 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
     reply = opening + main_info + rain_info + uv_info + aqi_info + tomorrow_info
     return reply
 
-
-# ============ AI CHAT ASHLEY ENDPOINT ============
 @app.post("/chat-ai")
 async def chat_ai(chat: ChatMessage):
     """Endpoint untuk chat AI Ashley dengan batasan topik cuaca"""
@@ -5098,7 +5192,7 @@ async def chat_ai(chat: ChatMessage):
     if not user_message:
         return {"reply": "Silakan tulis pesan Anda terlebih dahulu."}
     
-    # Cek apakah pertanyaan terkait cuaca
+
     weather_keywords = [
         "cuaca", "weather", "hujan", "rain", "cerah", "sunny", "berawan", "cloudy",
         "suhu", "temperature", "angin", "wind", "lembab", "humidity", "tekanan", "pressure",
@@ -5111,7 +5205,7 @@ async def chat_ai(chat: ChatMessage):
     
     message_lower = user_message.lower()
     
-    # Kata kunci yang menandakan topik di luar cuaca
+
     off_topic_keywords = [
         "politik", "presiden", "pemilu", "korupsi", "agama", "islam", "kristen", "hindu", "buddha",
         "seks", "porn", "narkoba", "judi", "togel", "sabung", "ayam", "senjata", "bom", "teroris",
@@ -5120,17 +5214,17 @@ async def chat_ai(chat: ChatMessage):
         "gosip", "skandal", "perselingkuhan", "cerai", "nikah", "pernikahan", "sepak bola", "bola"
     ]
     
-    # Cek apakah pertanyaan off-topic
+
     is_off_topic = any(kw in message_lower for kw in off_topic_keywords)
     
-    # Cek apakah ada keyword cuaca
+
     has_weather_keyword = any(kw in message_lower for kw in weather_keywords)
     
-    # Pertanyaan sapaan umum yang masih diperbolehkan
+
     greetings = ["hai", "hello", "halo", "hey", "assalamualaikum", "selamat pagi", "selamat siang", "selamat sore", "selamat malam"]
     is_greeting = any(msg in message_lower for msg in greetings)
     
-    # Pertanyaan tentang Ashley
+
     ashley_questions = ["siapa kamu", "kamu siapa", "nama kamu", "anda siapa", "ashley", "perkenalan"]
     is_ashley_question = any(q in message_lower for q in ashley_questions)
     
@@ -5144,13 +5238,13 @@ async def chat_ai(chat: ChatMessage):
             "reply": "Halo! Saya Ashley 👋\n\nSaya adalah asisten cuaca cerdas berbasis AI yang siap membantu Anda dengan:\n✅ Informasi cuaca real-time\n✅ Prakiraan cuaca\n✅ Analisis kualitas udara\n✅ Tips & rekomendasi cuaca\n\nTanyakan apapun tentang cuaca, dan saya akan dengan senang hati membantu! ☁️🌤️"
         }
     
-    # Jika hanya sapaan
+
     if is_greeting and not has_weather_keyword and len(user_message.split()) < 4:
         return {
             "reply": "Halo! Selamat datang di WeatherAI ☁️\n\nAda yang bisa saya bantu tentang cuaca hari ini? Silakan tanyakan prakiraan cuaca, suhu, atau kondisi cuaca di lokasi Anda!"
         }
     
-    # Dapatkan data cuaca saat ini untuk konteks
+
     try:
         lat = selected_location.get("latitude", -6.2)
         lon = selected_location.get("longitude", 106.816666)
@@ -5162,7 +5256,7 @@ async def chat_ai(chat: ChatMessage):
         
         condition = get_condition_text(weather.get("weather_code", 0))
         
-        # Buat prompt untuk Gemini dengan konteks cuaca
+
         prompt = f"""Kamu adalah Ashley, asisten cuaca yang santai dan profesional. Jawab pertanyaan pengguna tentang cuaca dengan lengkap, informatif, dan natural. Gunakan bahasa Indonesia yang santai tapi tetap informatif.
 
 DATA CUACA REAL-TIME ({location_name}):
@@ -5194,23 +5288,23 @@ JAWABAN:"""
                 word_count = len(response_text.split())
                 print(f"INFO:    Chat response received (panjang: {word_count} kata)")
                 
-                # Validasi panjang response
+
                 if word_count < 1 or word_count > 500:
                     print(f"⚠️ Response chat tidak ideal ({word_count} kata), menggunakan fallback")
                     reply = _build_weather_fallback_reply(weather, air_quality, forecast, location_name, api_unavailable=False)
                 else:
-                    # Bersihkan markdown dari response Gemini
+
                     reply = clean_markdown(response_text)
             else:
                 print("INFO:    Gemini returned None / rate limit, menggunakan fallback cuaca lengkap")
                 reply = _build_weather_fallback_reply(weather, air_quality, forecast, location_name, api_unavailable=True)
         else:
-            # Fallback AI tidak tersedia
+
             reply = _build_weather_fallback_reply(weather, air_quality, forecast, location_name, api_unavailable=True)
         
-        # Pastikan reply tidak terpotong di tengah kalimat
+
         if reply and not reply[-1] in '.!?':
-            # Cari titik terakhir
+
             last_period = reply.rfind('.')
             if last_period > len(reply) * 0.7:
                 reply = reply[:last_period+1]
