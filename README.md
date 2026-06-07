@@ -108,9 +108,9 @@
 │          │                 │                 │          │
 │   ┌──────▼─────────────────▼─────────────────▼───────┐  │
 │   │               Core Services                      │  │
-│   │  • WeatherService   • GeminiRotator              │  │
-│   │  • AirQualityService • LocationService           │  │
-│   │  • TimeService      • TestimonialService         │  │
+│   │  • WeatherService          • GeminiRotator       │  │
+│   │  • AirQualityService       • LocationService     │  │
+│   │  • TimeService             • TestimonialService  │  │
 │   └──────┬──────────────────────────────────┬────────┘  │
 └──────────┼──────────────────────────────────┼───────────┘
            │                                  │
