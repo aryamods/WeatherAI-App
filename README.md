@@ -78,8 +78,18 @@
 
 ### ⭐ Sistem Ulasan
 - Pengguna dapat memberikan ulasan dan rating (1–5 bintang)
-- Tampilan ulasan publik di halaman `/ulasan`
+- Tampilan ulasan publik di halaman `/about`
 - Admin dapat menghapus ulasan menggunakan password terproteksi
+
+### 📤 Export Data
+- Ekspor semua data dalam format **ZIP** (JSON + CSV + README + gambar CNN), **JSON**, atau **CSV**
+- Data mencakup cuaca real-time, prakiraan, AQI, lokasi tersimpan, testimonial, metrik model ML, dan histori prediksi CNN
+- Progress bar animasi saat proses unduhan berlangsung
+
+### 🗂️ Histori Prediksi CNN
+- Setiap prediksi (upload/kamera) otomatis tersimpan ke database `cnn_predictions.db`
+- Menyimpan: sumber, nama file, confidence, kelas prediksi, lokasi, dan timestamp
+- File gambar tersimpan otomatis di folder `cnn_images/`
 
 ### 🎨 UI/UX Modern
 - Desain **glassmorphism** dengan dark mode & light mode
@@ -151,16 +161,19 @@
 ```
 weatherai/
 │
-├── app.py                  # Aplikasi utama FastAPI (backend + frontend rendering)
-├── styles.css              # Stylesheet utama (di-serve sebagai static file)
-├── weather.db              # Database SQLite lokasi tersimpan (auto-generated)
-├── testimonials.db         # Database SQLite ulasan (auto-generated)
-├── weather_rf_model.pkl    # Model Random Forest terlatih (auto-generated)
-├── weather_cnn_model.keras # Model CNN TensorFlow (download dari Google Drive)
+├── app.py                    # Aplikasi utama FastAPI (backend + frontend rendering)
+├── styles.css                # Stylesheet utama (di-serve sebagai static file)
+├── weather.db                # Database SQLite lokasi tersimpan (auto-generated)
+├── testimonials.db           # Database SQLite ulasan (auto-generated)
+├── cnn_predictions.db        # Database histori prediksi CNN (auto-generated)
+├── weather_rf_model.pkl      # Model Random Forest terlatih (auto-generated)
+├── weather_cnn_model.keras   # Model CNN TensorFlow (download dari Google Drive)
 │
-├── .env                    # Konfigurasi environment variables (buat sendiri)
-├── requirements.txt        # Daftar dependensi Python
-└── README.md               # Dokumentasi proyek
+├── cnn_images/               # Folder gambar hasil prediksi CNN (auto-generated)
+├── static/                   # Folder static files (CSS, gambar tim, dll)
+├── .env                      # Konfigurasi environment variables (buat sendiri)
+├── requirements.txt          # Daftar dependensi Python
+└── README.md                 # Dokumentasi proyek
 ```
 
 ---
@@ -277,8 +290,9 @@ http://localhost:8080/redoc       # ReDoc
 | `GET` | `/` | Halaman beranda — cuaca saat ini + AI insights |
 | `GET` | `/main` | Dashboard ML — prediksi & klasifikasi gambar |
 | `GET` | `/search` | Halaman pencarian lokasi |
-| `GET` | `/ulasan` | Halaman ulasan pengguna |
-| `GET` | `/about` | Halaman tentang aplikasi |
+| `GET` | `/ulasan` | Form tulis ulasan |
+| `GET` | `/about` | Halaman tentang aplikasi & ulasan publik |
+| `GET` | `/export` | Halaman export data |
 
 ### API Fungsional
 
@@ -291,11 +305,13 @@ http://localhost:8080/redoc       # ReDoc
 | `GET` | `/delete-location/{id}` | Hapus lokasi tersimpan |
 | `GET` | `/train-model` | Latih ulang model Random Forest |
 | `POST` | `/predict-weather-image` | Prediksi cuaca dari upload gambar |
-| `POST` | `/predict-weather-camera` | Prediksi cuaca dari frame kamera |
+| `POST` | `/predict-weather-camera` | Prediksi cuaca dari frame kamera (base64) |
 | `POST` | `/download-cnn-model` | Download model CNN dari Google Drive |
 | `POST` | `/ulasan/submit` | Submit ulasan baru |
 | `POST` | `/verify-delete-testimonial/{id}` | Hapus ulasan (butuh password admin) |
 | `GET` | `/api-key-status` | Status penggunaan semua Gemini API key |
+| `GET` | `/export` | Halaman export dengan animasi download |
+| `GET` | `/export/download` | Download data (`?format=zip\|json\|csv`) |
 
 ### Contoh Request — Chat AI
 
@@ -388,16 +404,16 @@ Dashboard utama yang menampilkan:
 - Input koordinat manual (latitude/longitude)
 - Tambah dan simpan lokasi ke database
 
-### ⭐ Ulasan (`/ulasan`)
-- Form submit ulasan: nama, peran, komentar, rating bintang
-- Grid tampilan semua ulasan publik
+### ⭐ Ulasan (`/about`)
+- Form submit ulasan: nama, peran, komentar, rating bintang (tampil di halaman `/ulasan`)
+- Grid tampilan semua ulasan publik di halaman `/about`
 - Fitur hapus ulasan dengan verifikasi password admin
 
 ---
 
 ## 📊 Database
 
-Aplikasi menggunakan **dua database SQLite** yang dibuat otomatis:
+Aplikasi menggunakan **tiga database SQLite** yang dibuat otomatis:
 
 ### `weather.db` — Lokasi
 
@@ -423,6 +439,24 @@ CREATE TABLE testimonials (
     comment    TEXT NOT NULL,
     rating     INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### `cnn_predictions.db` — Histori Prediksi CNN
+
+```sql
+CREATE TABLE cnn_predictions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source        TEXT NOT NULL DEFAULT 'upload',  -- 'upload' atau 'camera'
+    filename      TEXT,
+    image_path    TEXT,
+    prediction    TEXT NOT NULL,
+    condition     TEXT NOT NULL,
+    confidence    REAL NOT NULL,
+    weather_code  INTEGER,
+    all_scores    TEXT,                            -- JSON string semua skor kelas
+    location_name TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
