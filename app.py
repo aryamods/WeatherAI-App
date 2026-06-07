@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Form, Request, File, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
@@ -25,6 +25,9 @@ import time
 import random
 from threading import Lock
 import re  # Untuk clean_markdown
+import io
+import zipfile
+import csv
 
 warnings.filterwarnings("ignore")
 
@@ -428,6 +431,121 @@ def delete_testimonial_by_id(testimonial_id: int):
     conn.close()
 
 init_testimonials_db()
+
+# ============ CNN PREDICTIONS DB ============
+CNN_DB_PATH = "cnn_predictions.db"
+CNN_IMAGES_DIR = "cnn_images"
+os.makedirs(CNN_IMAGES_DIR, exist_ok=True)
+
+def init_cnn_db():
+    conn = sqlite3.connect(CNN_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cnn_predictions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            source      TEXT NOT NULL DEFAULT 'upload',
+            filename    TEXT,
+            image_path  TEXT,
+            prediction  TEXT NOT NULL,
+            condition   TEXT NOT NULL,
+            confidence  REAL NOT NULL,
+            weather_code INTEGER,
+            all_scores  TEXT,
+            location_name TEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+    print("\033[92mINFO\033[0m:     Database CNN predictions initialized")
+
+def save_cnn_prediction(source: str, filename: str, image_bytes: bytes,
+                        prediction: str, condition: str, confidence: float,
+                        weather_code: int, all_scores: dict, location_name: str = None):
+    """Simpan satu prediksi CNN beserta file gambarnya."""
+    conn = sqlite3.connect(CNN_DB_PATH)
+    cursor = conn.cursor()
+
+    # Tentukan nama file unik
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    safe_pred = prediction.replace(" ", "_")
+    img_filename = f"pred_{ts}_{safe_pred}_{int(confidence)}pct.jpg"
+    img_path = os.path.join(CNN_IMAGES_DIR, img_filename)
+
+    # Simpan gambar ke disk (konversi ke JPEG lewat OpenCV)
+    try:
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is not None:
+            cv2.imwrite(img_path, img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        else:
+            img_path = None
+    except Exception:
+        img_path = None
+
+    cursor.execute("""
+        INSERT INTO cnn_predictions
+            (source, filename, image_path, prediction, condition, confidence,
+             weather_code, all_scores, location_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        source,
+        filename or img_filename,
+        img_path,
+        prediction,
+        condition,
+        round(confidence, 2),
+        weather_code,
+        json.dumps(all_scores or {}),
+        location_name,
+    ))
+    pred_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return pred_id
+
+def get_cnn_predictions(limit: int = 200):
+    conn = sqlite3.connect(CNN_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, source, filename, image_path, prediction, condition,
+               confidence, weather_code, all_scores, location_name, created_at
+        FROM cnn_predictions
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        result.append({
+            "id": r[0], "source": r[1], "filename": r[2], "image_path": r[3],
+            "prediction": r[4], "condition": r[5], "confidence": r[6],
+            "weather_code": r[7],
+            "all_scores": json.loads(r[8]) if r[8] else {},
+            "location_name": r[9], "created_at": r[10],
+        })
+    return result
+
+def get_cnn_stats():
+    conn = sqlite3.connect(CNN_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM cnn_predictions")
+    total = cursor.fetchone()[0]
+    cursor.execute("""
+        SELECT prediction, condition, COUNT(*) as cnt
+        FROM cnn_predictions
+        GROUP BY prediction
+        ORDER BY cnt DESC
+    """)
+    by_class = [{"prediction": r[0], "condition": r[1], "count": r[2]}
+                for r in cursor.fetchall()]
+    cursor.execute("SELECT AVG(confidence) FROM cnn_predictions")
+    avg_conf = cursor.fetchone()[0] or 0
+    conn.close()
+    return {"total": total, "by_class": by_class, "avg_confidence": round(avg_conf, 2)}
+
+init_cnn_db()
 
 def get_timezone_from_coords(latitude: float, longitude: float):
     if 95 <= longitude <= 141:
@@ -2252,6 +2370,10 @@ def render_page(content: str, active: str = "home", message: str = None, message
                     <a href="/about" class="nav-item {active_about}" data-page="about">
                         <i class="fas fa-info-circle"></i>
                         <span>Tentang</span>
+                    </a>
+                    <a href="/export" class="nav-item" style="color: var(--success);">
+                        <i class="fas fa-download"></i>
+                        <span>Export Data</span>
                     </a>
                 </nav>
 
@@ -5061,6 +5183,22 @@ async def predict_weather_from_image(file: UploadFile = File(...)):
         if "error" in result:
             return {"success": False, "error": result["error"]}
 
+        # Simpan ke histori
+        try:
+            save_cnn_prediction(
+                source="upload",
+                filename=file.filename,
+                image_bytes=contents,
+                prediction=result["prediction"],
+                condition=result["condition"],
+                confidence=result["confidence"],
+                weather_code=result["weather_code"],
+                all_scores=result.get("all_scores", {}),
+                location_name=selected_location.get("name"),
+            )
+        except Exception as e:
+            print(f"⚠️ Gagal simpan histori CNN: {e}")
+
         img_preview = base64.b64encode(contents).decode("utf-8")
 
         return {
@@ -5096,6 +5234,22 @@ async def predict_weather_from_camera(request: Request):
         if "error" in result:
             return {"success": False, "error": result["error"]}
         
+        # Simpan ke histori (kamera, tanpa nama file)
+        try:
+            save_cnn_prediction(
+                source="camera",
+                filename=None,
+                image_bytes=contents,
+                prediction=result["prediction"],
+                condition=result["condition"],
+                confidence=result["confidence"],
+                weather_code=result["weather_code"],
+                all_scores=result.get("all_scores", {}),
+                location_name=selected_location.get("name"),
+            )
+        except Exception as e:
+            print(f"⚠️ Gagal simpan histori CNN kamera: {e}")
+
         return {
             "success": True,
             "prediction": result["prediction"],
@@ -5216,6 +5370,617 @@ def _build_weather_fallback_reply(weather: dict, air_quality: dict, forecast: li
 
     reply = opening + main_info + rain_info + uv_info + aqi_info + tomorrow_info
     return reply
+
+
+# ============ EXPORT / DOWNLOAD ENDPOINT ============
+
+@app.get("/export")
+async def export_page(request: Request):
+    """Halaman export dengan animasi download"""
+    locs = get_saved_locations()
+    testimonials_count = len(get_all_testimonials())
+    locations_count = len(locs)
+    cnn_stats = get_cnn_stats()
+
+    content = f"""
+    <style>
+        .export-wrapper {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            padding: 32px 16px;
+            gap: 28px;
+        }}
+
+        .export-hero {{
+            text-align: center;
+            animation: fadeSlideUp 0.6s cubic-bezier(0.4,0,0.2,1) both;
+        }}
+
+        .export-cloud-icon {{
+            width: 96px;
+            height: 96px;
+            background: var(--accent-gradient);
+            border-radius: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+            color: white;
+            margin: 0 auto 20px;
+            box-shadow: 0 16px 40px rgba(59,130,246,0.35);
+            animation: iconFloat 3s ease-in-out infinite;
+        }}
+
+        @keyframes iconFloat {{
+            0%,100% {{ transform: translateY(0px); box-shadow: 0 16px 40px rgba(59,130,246,0.35); }}
+            50% {{ transform: translateY(-8px); box-shadow: 0 24px 50px rgba(59,130,246,0.5); }}
+        }}
+
+        .export-title {{
+            font-size: 28px;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 8px;
+        }}
+
+        .export-subtitle {{
+            color: var(--text-tertiary);
+            font-size: 14px;
+        }}
+
+        .export-stats {{
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: fadeSlideUp 0.6s 0.1s cubic-bezier(0.4,0,0.2,1) both;
+        }}
+
+        .stat-pill {{
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 50px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            box-shadow: var(--shadow-sm);
+        }}
+
+        .stat-pill i {{ color: var(--accent); font-size: 15px; }}
+
+        .export-cards {{
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 760px;
+            width: 100%;
+            animation: fadeSlideUp 0.6s 0.2s cubic-bezier(0.4,0,0.2,1) both;
+        }}
+
+        .export-card {{
+            background: var(--card-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 24px;
+            padding: 28px 24px;
+            flex: 1;
+            min-width: 200px;
+            max-width: 240px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+        }}
+
+        .export-card::before {{
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border-radius: 24px;
+        }}
+
+        .export-card.zip::before {{ background: linear-gradient(135deg,rgba(59,130,246,0.08),rgba(99,102,241,0.08)); }}
+        .export-card.json::before {{ background: linear-gradient(135deg,rgba(245,158,11,0.08),rgba(251,191,36,0.08)); }}
+        .export-card.csv::before {{ background: linear-gradient(135deg,rgba(16,185,129,0.08),rgba(52,211,153,0.08)); }}
+
+        .export-card:hover {{
+            transform: translateY(-6px);
+            box-shadow: var(--shadow-xl);
+            border-color: var(--accent);
+        }}
+        .export-card:hover::before {{ opacity: 1; }}
+
+        .card-format-icon {{
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 14px;
+            color: white;
+        }}
+
+        .export-card.zip .card-format-icon {{ background: linear-gradient(135deg,#3b82f6,#6366f1); box-shadow: 0 8px 20px rgba(59,130,246,0.3); }}
+        .export-card.json .card-format-icon {{ background: linear-gradient(135deg,#f59e0b,#fbbf24); box-shadow: 0 8px 20px rgba(245,158,11,0.3); }}
+        .export-card.csv .card-format-icon {{ background: linear-gradient(135deg,#10b981,#34d399); box-shadow: 0 8px 20px rgba(16,185,129,0.3); }}
+
+        .card-format-label {{
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }}
+
+        .card-format-desc {{
+            font-size: 12px;
+            color: var(--text-tertiary);
+            line-height: 1.5;
+            margin-bottom: 18px;
+        }}
+
+        .card-badge {{
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 50px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .export-card.zip .card-badge {{ background: rgba(59,130,246,0.12); color: #3b82f6; }}
+        .export-card.json .card-badge {{ background: rgba(245,158,11,0.12); color: #d97706; }}
+        .export-card.csv .card-badge {{ background: rgba(16,185,129,0.12); color: #10b981; }}
+
+        /* ── Overlay animasi download ── */
+        .download-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }}
+
+        .download-overlay.show {{
+            opacity: 1;
+            visibility: visible;
+        }}
+
+        .download-modal {{
+            background: var(--card-bg);
+            border-radius: 28px;
+            padding: 40px 48px;
+            text-align: center;
+            max-width: 360px;
+            width: 90%;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-xl);
+            transform: scale(0.85);
+            transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+        }}
+
+        .download-overlay.show .download-modal {{
+            transform: scale(1);
+        }}
+
+        .download-anim-ring {{
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent);
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+            position: relative;
+        }}
+
+        .download-anim-ring::after {{
+            content: '⬇️';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            animation: none;
+            border: none;
+        }}
+
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+
+        .download-modal-title {{
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }}
+
+        .download-modal-sub {{
+            font-size: 13px;
+            color: var(--text-tertiary);
+            margin-bottom: 20px;
+        }}
+
+        .download-progress-bar {{
+            background: var(--border-color);
+            border-radius: 50px;
+            height: 6px;
+            overflow: hidden;
+        }}
+
+        .download-progress-fill {{
+            height: 100%;
+            background: var(--accent-gradient);
+            border-radius: 50px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }}
+
+        /* success state */
+        .download-modal.done .download-anim-ring {{
+            border-color: #10b981;
+            border-top-color: #10b981;
+            animation: none;
+        }}
+        .download-modal.done .download-anim-ring::after {{
+            content: '✅';
+        }}
+
+        @keyframes fadeSlideUp {{
+            from {{ opacity:0; transform:translateY(24px); }}
+            to   {{ opacity:1; transform:translateY(0);    }}
+        }}
+    </style>
+
+    <!-- Overlay animasi -->
+    <div class="download-overlay" id="dlOverlay">
+        <div class="download-modal" id="dlModal">
+            <div class="download-anim-ring"></div>
+            <div class="download-modal-title" id="dlTitle">Menyiapkan file...</div>
+            <div class="download-modal-sub" id="dlSub">Mengumpulkan data cuaca & lokasi</div>
+            <div class="download-progress-bar">
+                <div class="download-progress-fill" id="dlProgress"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="export-wrapper">
+        <div class="export-hero">
+            <div class="export-cloud-icon">
+                <i class="fas fa-cloud-download-alt"></i>
+            </div>
+            <div class="export-title">Export Data WeatherAI</div>
+            <div class="export-subtitle">Unduh semua data cuaca, lokasi, dan testimonial kamu</div>
+        </div>
+
+        <div class="export-stats">
+            <div class="stat-pill"><i class="fas fa-map-marker-alt"></i> {locations_count} Lokasi Tersimpan</div>
+            <div class="stat-pill"><i class="fas fa-star"></i> {testimonials_count} Testimonial</div>
+            <div class="stat-pill"><i class="fas fa-cloud-sun"></i> Data Real-time</div>
+            <div class="stat-pill"><i class="fas fa-brain"></i> Metrik Model ML</div>
+            <div class="stat-pill"><i class="fas fa-image"></i> {cnn_stats['total']} Prediksi CNN</div>
+        </div>
+
+        <div class="export-cards">
+            <div class="export-card zip" onclick="startDownload('zip')">
+                <div class="card-format-icon"><i class="fas fa-file-archive"></i></div>
+                <div class="card-format-label">ZIP Lengkap</div>
+                <div class="card-format-desc">JSON + CSV + README dalam satu paket. Paling lengkap.</div>
+                <span class="card-badge">Rekomendasi</span>
+            </div>
+            <div class="export-card json" onclick="startDownload('json')">
+                <div class="card-format-icon"><i class="fas fa-code"></i></div>
+                <div class="card-format-label">JSON</div>
+                <div class="card-format-desc">Satu file terstruktur. Cocok untuk developer & analisis.</div>
+                <span class="card-badge">Developer</span>
+            </div>
+            <div class="export-card csv" onclick="startDownload('csv')">
+                <div class="card-format-icon"><i class="fas fa-table"></i></div>
+                <div class="card-format-label">CSV</div>
+                <div class="card-format-desc">Tabel lokasi & testimonial. Buka langsung di Excel.</div>
+                <span class="card-badge">Excel-ready</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function startDownload(format) {{
+        var overlay  = document.getElementById('dlOverlay');
+        var modal    = document.getElementById('dlModal');
+        var title    = document.getElementById('dlTitle');
+        var sub      = document.getElementById('dlSub');
+        var progress = document.getElementById('dlProgress');
+
+        var labels = {{
+            zip:  ['Mengemas file ZIP...', 'Menggabungkan JSON, CSV & README'],
+            json: ['Menyusun data JSON...', 'Mengumpulkan cuaca & prakiraan'],
+            csv:  ['Membuat file CSV...', 'Memformat lokasi & testimonial']
+        }};
+
+        title.textContent    = labels[format][0];
+        sub.textContent      = labels[format][1];
+        progress.style.width = '0%';
+        modal.classList.remove('done');
+        overlay.classList.add('show');
+
+        // Progress bar animasi
+        var pct = 0;
+        var speed = [15, 35, 60, 80, 92]; // milestone %
+        var si = 0;
+        var timer = setInterval(function() {{
+            if (si < speed.length) {{
+                pct = speed[si++];
+                progress.style.width = pct + '%';
+            }}
+        }}, 350);
+
+        // Trigger download via hidden anchor
+        setTimeout(function() {{
+            var a = document.createElement('a');
+            a.href = '/export/download?format=' + format;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }}, 400);
+
+        // Selesai — tunjukkan centang hijau lalu tutup overlay
+        setTimeout(function() {{
+            clearInterval(timer);
+            progress.style.width = '100%';
+            title.textContent = 'Download Berhasil! 🎉';
+            sub.textContent   = 'File sudah tersimpan di folder unduhan kamu';
+            modal.classList.add('done');
+        }}, 2400);
+
+        setTimeout(function() {{
+            overlay.classList.remove('show');
+        }}, 4000);
+    }}
+    </script>
+    """
+    return HTMLResponse(render_page(
+        content=content,
+        active="export",
+        saved_locations=locs,
+        selected_location=selected_location,
+    ))
+
+
+@app.get("/export/download")
+async def export_data(format: str = "zip"):
+    """
+    Export semua data aplikasi WeatherAI.
+    
+    Query params:
+      ?format=zip   → ZIP berisi weather_data.json + locations.csv + testimonials.csv (default)
+      ?format=json  → Satu file JSON lengkap
+      ?format=csv   → ZIP khusus CSV (locations + testimonials)
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # ── 1. Kumpulkan data ────────────────────────────────────────────────
+    locations = get_saved_locations()
+    testimonials = get_all_testimonials()
+
+    # Cuaca & prakiraan untuk lokasi aktif saat ini
+    lat = selected_location.get("latitude", -6.2)
+    lon = selected_location.get("longitude", 106.816666)
+    location_name = selected_location.get("name", "Jakarta")
+
+    try:
+        weather = get_current_weather(lat, lon)
+        air_quality = get_air_quality(lat, lon)
+        forecast = get_6day_forecast(lat, lon)
+        local_time = get_local_time(lat, lon)
+    except Exception:
+        weather, air_quality, forecast, local_time = {}, {}, [], {}
+
+    # Tambahkan label kondisi ke forecast
+    forecast_labeled = []
+    for f in forecast:
+        f_copy = dict(f)
+        f_copy["condition"] = get_condition_text(f.get("weather_code", 0))
+        forecast_labeled.append(f_copy)
+
+    # Metrics model ML (Random Forest) jika ada
+    model_metrics = {}
+    if os.path.exists(MODEL_PATH):
+        try:
+            saved = joblib.load(MODEL_PATH)
+            model_metrics = {
+                "algorithm": "Random Forest Regressor",
+                "task": "Prediksi suhu (regresi)",
+                "location": saved.get("location", "-"),
+                "mae": saved.get("mae"),
+                "mae_std": saved.get("mae_std"),
+                "r2": saved.get("r2"),
+                "r2_std": saved.get("r2_std"),
+                "rmse": saved.get("rmse"),
+                "mape": saved.get("mape"),
+                "n_folds": saved.get("n_folds"),
+                "fold_results": saved.get("fold_results", []),
+            }
+        except Exception:
+            pass
+
+    # Info + histori prediksi CNN
+    cnn_exists = os.path.exists(MODEL_CKPT_PATH)
+    cnn_predictions = get_cnn_predictions(limit=200)
+    cnn_stats = get_cnn_stats()
+    cnn_model_info = {
+        "algorithm": "Convolutional Neural Network (CNN)",
+        "task": "Klasifikasi kondisi cuaca dari gambar",
+        "framework": "TensorFlow / Keras",
+        "input_size": f"{IMG_SIZE[0]}x{IMG_SIZE[1]} px (RGB)",
+        "architecture": [
+            "Conv2D(32, 3x3, relu) -> MaxPool2D",
+            "Conv2D(64, 3x3, relu) -> MaxPool2D",
+            "Conv2D(128, 3x3, relu) -> MaxPool2D",
+            "Flatten -> Dropout(0.5) -> Dense(256, relu)",
+            f"Dense({len(CLASS_NAMES)}, softmax)",
+        ],
+        "classes": CLASS_NAMES,
+        "class_labels_id": {
+            "cloudy": "Berawan", "foggy": "Kabut", "rainy": "Hujan",
+            "shine": "Cerah", "sunrise": "Matahari Terbit",
+        },
+        "optimizer": "Adam",
+        "loss_function": "Categorical Crossentropy",
+        "training_epochs": 15,
+        "model_file": MODEL_CKPT_PATH,
+        "model_available": cnn_exists,
+        "model_size_mb": round(os.path.getsize(MODEL_CKPT_PATH) / (1024 * 1024), 2) if cnn_exists else None,
+        "tensorflow_available": TF_AVAILABLE,
+        "prediction_stats": cnn_stats,
+    }
+    if cnn_exists and TF_AVAILABLE and weather_image_classifier.model is not None:
+        try:
+            cnn_model_info["total_params"] = int(weather_image_classifier.model.count_params())
+        except Exception:
+            pass
+
+    # ── 2. Susun struktur JSON ───────────────────────────────────────────
+    export_payload = {
+        "exported_at": datetime.now().isoformat(),
+        "app_version": "3.0.0",
+        "active_location": {
+            "name": location_name,
+            "latitude": lat,
+            "longitude": lon,
+            "local_time": local_time,
+        },
+        "current_weather": {
+            **weather,
+            "condition": get_condition_text(weather.get("weather_code", 0)),
+        },
+        "air_quality": air_quality,
+        "forecast_6day": forecast_labeled,
+        "saved_locations": locations,
+        "testimonials": testimonials,
+        "ml_model_metrics": model_metrics,
+        "cnn_model_info": cnn_model_info,
+        "cnn_predictions": [
+            {k: v for k, v in p.items() if k != "image_path"}
+            for p in cnn_predictions
+        ],
+    }
+
+    # ── 3. Helper: buat CSV bytes ────────────────────────────────────────
+    def make_csv_bytes(rows: list, fieldnames: list) -> bytes:
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+        return buf.getvalue().encode("utf-8")
+
+    locations_csv_fields     = ["id", "name", "latitude", "longitude", "country", "timezone"]
+    testimonials_csv_fields  = ["id", "name", "role", "rating", "comment", "created_at"]
+    cnn_csv_fields           = ["id", "source", "filename", "prediction", "condition",
+                                "confidence", "weather_code", "location_name", "created_at"]
+
+    # ── 4. Pilih format output ───────────────────────────────────────────
+    if format == "json":
+        json_bytes = json.dumps(export_payload, ensure_ascii=False, indent=2).encode("utf-8")
+        return StreamingResponse(
+            io.BytesIO(json_bytes),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="weatherai_export_{timestamp}.json"'},
+        )
+
+    elif format == "csv":
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"locations_{timestamp}.csv",
+                        make_csv_bytes(locations, locations_csv_fields))
+            zf.writestr(f"testimonials_{timestamp}.csv",
+                        make_csv_bytes(testimonials, testimonials_csv_fields))
+            zf.writestr(f"cnn_predictions_{timestamp}.csv",
+                        make_csv_bytes(cnn_predictions, cnn_csv_fields))
+        zip_buf.seek(0)
+        return StreamingResponse(
+            zip_buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="weatherai_csv_{timestamp}.zip"'},
+        )
+
+    else:
+        # Default: ZIP lengkap
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            # JSON utama (tanpa image_path, gambar ada di folder sendiri)
+            zf.writestr(
+                f"weather_data_{timestamp}.json",
+                json.dumps(export_payload, ensure_ascii=False, indent=2),
+            )
+            # CSV lokasi
+            zf.writestr(
+                f"locations_{timestamp}.csv",
+                make_csv_bytes(locations, locations_csv_fields).decode("utf-8"),
+            )
+            # CSV testimonial
+            zf.writestr(
+                f"testimonials_{timestamp}.csv",
+                make_csv_bytes(testimonials, testimonials_csv_fields).decode("utf-8"),
+            )
+            # CSV prediksi CNN
+            zf.writestr(
+                f"cnn_predictions_{timestamp}.csv",
+                make_csv_bytes(cnn_predictions, cnn_csv_fields).decode("utf-8"),
+            )
+            # File gambar CNN (maks 50 terbaru biar ZIP tidak bengkak)
+            images_added = 0
+            for pred in cnn_predictions[:50]:
+                img_path = pred.get("image_path")
+                if img_path and os.path.exists(img_path):
+                    arcname = f"cnn_images/{os.path.basename(img_path)}"
+                    zf.write(img_path, arcname)
+                    images_added += 1
+
+            # README
+            readme = (
+                "WeatherAI Export\n"
+                "================\n"
+                f"Diekspor pada    : {datetime.now().strftime('%d %B %Y %H:%M:%S')}\n"
+                f"Lokasi aktif     : {location_name} ({lat}, {lon})\n"
+                f"Total prediksi CNN: {cnn_stats['total']} (gambar disertakan: {images_added})\n\n"
+                "Isi file:\n"
+                f"  weather_data_{timestamp}.json      — Cuaca, prakiraan, AQI, metrik RF & CNN\n"
+                f"  locations_{timestamp}.csv           — Daftar lokasi tersimpan\n"
+                f"  testimonials_{timestamp}.csv        — Testimonial pengguna\n"
+                f"  cnn_predictions_{timestamp}.csv     — Histori prediksi CNN (label, confidence, waktu)\n"
+                f"  cnn_images/                         — File gambar dari prediksi CNN (maks 50 terbaru)\n"
+            )
+            zf.writestr("README.txt", readme)
+
+        zip_buf.seek(0)
+        return StreamingResponse(
+            zip_buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="weatherai_export_{timestamp}.zip"'},
+        )
 
 
 # ============ AI CHAT ASHLEY ENDPOINT ============
