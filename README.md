@@ -177,7 +177,7 @@ Pastikan sistem kamu memiliki:
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/username/weatherai.git
+git clone https://github.com/aryamods/WeatherAI-App.git
 cd weatherai
 ```
 
