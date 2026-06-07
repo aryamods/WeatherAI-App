@@ -1,3 +1,4 @@
+/* static/styles.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
 
 :root {
@@ -67,7 +68,7 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    background:
+    background: 
         radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
         radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
         radial-gradient(circle at 60% 10%, rgba(168, 85, 247, 0.06) 0%, transparent 40%);
@@ -77,30 +78,35 @@ body::before {
 }
 
 @keyframes backgroundShift {
-    0%, 100% {
+    0%, 100% { 
         transform: scale(1) rotate(0deg);
         opacity: 0.6;
     }
-    33% {
+    33% { 
         transform: scale(1.05) rotate(1deg);
         opacity: 0.8;
     }
-    66% {
+    66% { 
         transform: scale(0.95) rotate(-1deg);
         opacity: 0.7;
     }
 }
 
+/* ============ SIDEBAR SCROLL ============ */
+/* Sidebar = flex column, overflow hidden */
+/* Hanya .sidebar-section (lokasi tersimpan) yang scroll */
 .sidebar {
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
+/* Header logo: tidak scroll, ukuran tetap */
 .sidebar-header {
     flex-shrink: 0;
 }
 
+/* Wrapper konten: flex column, ambil sisa tinggi */
 .sidebar-content-wrapper {
     flex: 1;
     min-height: 0;
@@ -110,10 +116,12 @@ body::before {
     padding-right: 0;
 }
 
+/* Nav menu: tidak scroll, ukuran tetap */
 .sidebar-nav {
     flex-shrink: 0;
 }
 
+/* Section lokasi: ambil sisa ruang dan scroll */
 .sidebar-section {
     flex: 1;
     min-height: 0;
@@ -122,10 +130,12 @@ body::before {
     overflow: hidden;
 }
 
+/* Judul section: tidak scroll */
 .sidebar-section-title {
     flex-shrink: 0;
 }
 
+/* Daftar lokasi: scroll di sini saja, max-height agar tombol tidak terdorong jauh */
 .sidebar-locations {
     flex: 0 1 auto;
     min-height: 0;
@@ -139,11 +149,13 @@ body::before {
     -webkit-overflow-scrolling: touch;
 }
 
+/* Tombol tambah lokasi: langsung di bawah list, tidak scroll */
 .sidebar-section > a[href="/search"] {
     flex-shrink: 0;
     margin-top: 10px !important;
 }
 
+/* Scrollbar pada daftar lokasi */
 .sidebar-locations::-webkit-scrollbar {
     width: 4px;
 }
@@ -210,11 +222,11 @@ body::before {
 }
 
 @keyframes cloudFloat {
-    0%, 100% {
+    0%, 100% { 
         transform: translateY(0px) scale(1);
         filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
     }
-    50% {
+    50% { 
         transform: translateY(-20px) scale(1.05);
         filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.5));
     }
@@ -459,6 +471,7 @@ body::before {
     box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
 }
 
+
 .search-container {
     transition: var(--transition);
     position: relative;
@@ -514,6 +527,8 @@ body::before {
     box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
 }
 
+/* ============ PERBAIKAN TOMBOL ============ */
+/* Tombol ML (Random Forest) - warna ungu */
 .train-btn-ml {
     background: linear-gradient(135deg, #8b5cf6, #a855f7, #c084fc);
     background-size: 200% 200%;
@@ -545,6 +560,7 @@ body::before {
     box-shadow: none;
 }
 
+/* Tombol Green (Download CNN Model) - warna hijau */
 .train-btn-green {
     background: linear-gradient(135deg, #10b981, #059669);
     background-size: 200% 200%;
@@ -599,6 +615,7 @@ body::before {
     100% { background-position: -200% 0; }
 }
 
+/* ============ WHATSAPP NOTIFICATION - THEME RESPONSIVE ============ */
 .whatsapp-notification {
     position: fixed;
     top: 20px;
@@ -655,10 +672,10 @@ body.dark .whatsapp-notification {
 }
 
 @keyframes whatsappPulse {
-    0%, 100% {
+    0%, 100% { 
         box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.4);
     }
-    50% {
+    50% { 
         box-shadow: 0 0 0 8px rgba(37, 211, 102, 0);
     }
 }
@@ -769,20 +786,20 @@ body.dark .notification-close {
         right: 20px;
         top: 20px;
     }
-
+    
     .notification-content {
         padding: 12px;
     }
-
+    
     .notification-image {
         width: 55px;
         height: 55px;
     }
-
+    
     .notification-image i {
         font-size: 24px;
     }
-
+    
     .notification-image img {
         width: 100%;
         height: 100%;
@@ -1387,12 +1404,16 @@ body.dark .notification-close {
     color: var(--danger);
 }
 
+
+/* ============ THEME SWITCH IN HEADER ============ */
+
 .sidebar-logo-group {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
+/* Wrapper label — hanya track, tidak ada ikon luar */
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
@@ -1409,13 +1430,14 @@ body.dark .notification-close {
     background: var(--accent-soft);
 }
 
+/* Track — lebih lebar agar knob besar muat */
 .theme-switch-track {
     position: relative;
     display: inline-block;
     width: 56px;
     height: 30px;
     border-radius: 50px;
-
+    /* mode terang: langit biru muda */
     background: linear-gradient(135deg, #bae6fd, #7dd3fc);
     border: 1.5px solid rgba(125, 211, 252, 0.6);
     box-shadow: 0 2px 10px rgba(125, 211, 252, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
@@ -1432,6 +1454,7 @@ body.dark .notification-close {
     pointer-events: none;
 }
 
+/* Knob — lingkaran putih besar */
 .theme-switch-knob {
     position: absolute;
     top: 3px;
@@ -1449,6 +1472,7 @@ body.dark .notification-close {
     overflow: hidden;
 }
 
+/* SVG ikon di dalam knob */
 .knob-sun,
 .knob-moon {
     position: absolute;
@@ -1457,21 +1481,25 @@ body.dark .notification-close {
     transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Default: tampilkan matahari, sembunyikan bulan */
 .knob-sun  { opacity: 1; transform: rotate(0deg) scale(1); }
 .knob-moon { opacity: 0; transform: rotate(-45deg) scale(0.6); }
 
+/* Dark mode — track: malam biru gelap */
 .theme-switch-track:has(input:checked) {
     background: linear-gradient(135deg, #0f172a, #1e1b4b);
     border-color: rgba(139, 92, 246, 0.5);
     box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
+/* Dark mode — knob geser kanan, warna gelap */
 .theme-switch-track:has(input:checked) .theme-switch-knob {
     transform: translateX(26px);
     background: #1e1b4b;
     box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
 }
 
+/* Dark mode — tampilkan bulan, sembunyikan matahari */
 .theme-switch-track:has(input:checked) .knob-sun  {
     opacity: 0;
     transform: rotate(45deg) scale(0.6);
@@ -1481,6 +1509,8 @@ body.dark .notification-close {
     transform: rotate(0deg) scale(1);
 }
 
+
+/* ============ NAV TAB — drawer puller ============ */
 .menu-toggle { display: none !important; }
 
 .nav-tab {
@@ -1501,6 +1531,7 @@ body.dark .notification-close {
                 left 0.3s ease;
 }
 
+/* Garis gradien animasi bergerak dari atas ke bawah */
 .nav-tab::after {
     content: '';
     position: absolute;
@@ -1526,6 +1557,7 @@ body.dark .notification-close {
     100% { transform: translateY(0%); }
 }
 
+/* Hapus elemen dot lama (jaga-jaga jika masih ada di HTML) */
 .nav-tab-dots { display: none; }
 .nav-tab-dot  { display: none; }
 
@@ -1582,6 +1614,7 @@ body.dark .nav-tab:hover {
     border-radius: 10px;
 }
 
+/* ============ MODAL TIM REDESIGN ============ */
 .modal-tim {
     display: none;
     position: fixed;
@@ -1887,59 +1920,59 @@ body.dark .nav-tab:hover {
         border-radius: 24px;
         max-width: 95%;
     }
-
+    
     .modal-title-glow {
         font-size: 18px;
     }
-
+    
     .modal-subtitle {
         font-size: 10px;
     }
-
+    
     .team-grid-enhanced {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
     }
-
+    
     .team-card-enhanced {
         width: 100%;
         padding: 12px 10px;
     }
-
+    
     .team-avatar-enhanced {
         width: 65px;
         height: 65px;
     }
-
+    
     .team-name-enhanced {
         font-size: 12px;
     }
-
+    
     .team-role {
         font-size: 8px;
     }
-
+    
     .team-nim-enhanced {
         font-size: 8px;
         padding: 2px 6px;
     }
-
+    
     .team-social {
         gap: 6px;
     }
-
+    
     .social-icon {
         width: 26px;
         height: 26px;
         font-size: 11px;
     }
-
+    
     .modal-footer-stats {
         flex-wrap: wrap;
         gap: 10px;
     }
-
+    
     .stat-item {
         font-size: 10px;
         padding: 3px 10px;
@@ -1951,53 +1984,53 @@ body.dark .nav-tab:hover {
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
     }
-
+    
     .team-card-enhanced {
         width: 100%;
         padding: 10px 8px;
     }
-
+    
     .team-avatar-enhanced {
         width: 55px;
         height: 55px;
         margin-bottom: 8px;
     }
-
+    
     .avatar-badge {
         width: 18px;
         height: 18px;
         font-size: 8px;
     }
-
+    
     .team-name-enhanced {
         font-size: 11px;
     }
-
+    
     .team-role {
         font-size: 7px;
         margin-bottom: 4px;
     }
-
+    
     .team-nim-enhanced {
         font-size: 7px;
         padding: 2px 5px;
         margin-bottom: 6px;
     }
-
+    
     .team-social {
         gap: 5px;
     }
-
+    
     .social-icon {
         width: 22px;
         height: 22px;
         font-size: 9px;
     }
-
+    
     .modal-footer-stats {
         gap: 8px;
     }
-
+    
     .stat-item {
         font-size: 9px;
         padding: 2px 8px;
@@ -2005,7 +2038,7 @@ body.dark .nav-tab:hover {
 }
 
 @media (max-width: 768px) {
-
+    /* Layout struktur dasar */
     .app {
         flex-direction: column;
     }
@@ -2024,34 +2057,35 @@ body.dark .nav-tab:hover {
     .sidebar {
         width: 240px;
     }
-
+    
     .main {
         padding: 24px 32px;
     }
-
+    
     .weather-hero {
         padding: 32px 36px;
     }
-
+    
     .hero-title {
         font-size: 32px;
     }
-
+    
     .bento-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 24px;
     }
-
+    
     .forecast-grid {
         grid-template-columns: repeat(4, 1fr);
     }
-
+    
     .stat-card {
         padding: 16px 24px;
         min-width: 100px;
     }
 }
 
+/* ============ AI CHAT ASHLEY - DESKTOP/LAPTOP ============ */
 .chat-toggle {
     position: fixed;
     bottom: 28px;
@@ -2145,6 +2179,7 @@ body.dark .nav-tab:hover {
     flex-shrink: 0;
 }
 
+/* Garis aksen vertikal animasi — senada nav-tab */
 .chat-header-bar {
     width: 4px;
     height: 28px;
@@ -2361,6 +2396,7 @@ body.dark .nav-tab:hover {
     transform: none;
 }
 
+/* Scrollbar untuk chat messages */
 .chat-messages::-webkit-scrollbar {
     width: 4px;
 }
@@ -2375,6 +2411,7 @@ body.dark .nav-tab:hover {
     border-radius: 10px;
 }
 
+/* Responsive chat untuk mobile */
 @media (max-width: 768px) {
     .chat-toggle {
         bottom: 80px;
@@ -2387,7 +2424,7 @@ body.dark .nav-tab:hover {
     .chat-toggle-text {
         font-size: 13px;
     }
-
+    
     .chat-bubble {
         width: calc(100vw - 40px);
         right: 20px;
@@ -2404,31 +2441,31 @@ body.dark .nav-tab:hover {
         bottom: 76px;
         border-radius: 24px;
     }
-
+    
     .chat-header {
         padding: 12px 16px;
     }
-
+    
     .chat-messages {
         padding: 12px;
     }
-
+    
     .chat-message {
         max-width: 90%;
     }
-
+    
     .chat-bubble-text {
         font-size: 12px;
         padding: 8px 12px;
     }
 }
-
+/* ============ BOTTOM NAVIGATION - MOBILE ============ */
 .bottom-nav {
     display: none;
 }
 
 @media (max-width: 768px) {
-
+    /* Bottom nav — struktur utama */
     .bottom-nav {
         display: flex;
         position: fixed;
@@ -2466,13 +2503,19 @@ body.dark .nav-tab:hover {
         color: var(--accent);
     }
 
-
+    /* Posisi chat toggle di mobile — di atas bottom-nav */
     .chat-toggle {
         bottom: calc(64px + max(8px, env(safe-area-inset-bottom)) + 10px);
         right: 16px;
     }
 }
 
+/* ============================================================
+   RESPONSIVE FLUID MOBILE — AUTO-FIT SEMUA UKURAN PONSEL
+   Menggunakan clamp() agar otomatis skala tanpa breakpoint kaku
+   ============================================================ */
+
+/* --- FLUID TYPOGRAPHY (otomatis skala 320px → 768px) --- */
 :root {
     --fluid-xs:   clamp(9px,  2.2vw, 11px);
     --fluid-sm:   clamp(11px, 2.8vw, 13px);
@@ -2482,31 +2525,31 @@ body.dark .nav-tab:hover {
     --fluid-xl:   clamp(22px, 6vw,   28px);
     --fluid-2xl:  clamp(26px, 7.5vw, 36px);
 
-
+    /* Spacing fluid */
     --sp-xs:  clamp(4px,  1vw,  8px);
     --sp-sm:  clamp(8px,  2vw,  14px);
     --sp-md:  clamp(12px, 3vw,  20px);
     --sp-lg:  clamp(16px, 4vw,  28px);
     --sp-xl:  clamp(20px, 5vw,  36px);
 
-
+    /* Touch target minimum */
     --touch-min: max(44px, 11vw);
 }
 
 @media (max-width: 768px) {
 
-
+    /* --- BODY & GLOBAL --- */
     body {
         font-size: var(--fluid-base);
         -webkit-text-size-adjust: 100%;
     }
 
-
+    /* --- MAIN CONTENT AREA --- */
     .main {
         padding: var(--sp-md) var(--sp-sm) calc(var(--sp-xl) + 56px) !important;
     }
 
-
+    /* --- HERO SECTION --- */
     .hero {
         margin-bottom: var(--sp-lg);
     }
@@ -2522,7 +2565,7 @@ body.dark .nav-tab:hover {
         line-height: 1.6;
     }
 
-
+    /* --- WEATHER HERO CARD --- */
     .weather-hero {
         padding: var(--sp-lg) var(--sp-md) !important;
         border-radius: clamp(20px, 5vw, 36px) !important;
@@ -2558,7 +2601,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-sm) !important;
     }
 
-
+    /* --- STATS GRID --- */
     .stats-grid {
         display: grid !important;
         grid-template-columns: repeat(2, 1fr) !important;
@@ -2590,7 +2633,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-xs) !important;
     }
 
-
+    /* --- FORECAST GRID (scroll horizontal) --- */
     .forecast-grid {
         display: flex !important;
         flex-wrap: nowrap !important;
@@ -2637,7 +2680,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-xs) !important;
     }
 
-
+    /* --- GLASS CARDS --- */
     .glass-card {
         padding: var(--sp-md) !important;
         border-radius: clamp(18px, 5vw, 32px) !important;
@@ -2660,7 +2703,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-xs) !important;
     }
 
-
+    /* --- INFO ITEMS --- */
     .info-item {
         padding: var(--sp-sm) !important;
         border-radius: clamp(14px, 4vw, 24px) !important;
@@ -2679,7 +2722,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-md) !important;
     }
 
-
+    /* --- SEARCH --- */
     .search-container {
         flex-direction: column !important;
         border-radius: clamp(18px, 5vw, 32px) !important;
@@ -2702,7 +2745,7 @@ body.dark .nav-tab:hover {
         border-radius: clamp(14px, 4vw, 50px) !important;
     }
 
-
+    /* --- TOMBOL UTAMA --- */
     .train-btn-ml,
     .train-btn-green {
         padding: var(--sp-sm) var(--sp-lg) !important;
@@ -2712,7 +2755,7 @@ body.dark .nav-tab:hover {
         border-radius: clamp(22px, 6vw, 50px) !important;
     }
 
-
+    /* --- FLASH MESSAGES --- */
     .flash {
         padding: var(--sp-sm) var(--sp-md) !important;
         border-radius: clamp(18px, 5vw, 32px) !important;
@@ -2720,7 +2763,7 @@ body.dark .nav-tab:hover {
         margin-bottom: var(--sp-md);
     }
 
-
+    /* --- SIDEBAR (menu 60%) --- */
     .sidebar {
         position: fixed;
         left: -100%;
@@ -2730,7 +2773,7 @@ body.dark .nav-tab:hover {
         transition: left 0.3s ease;
         border-radius: 0 clamp(20px, 5vw, 32px) clamp(20px, 5vw, 32px) 0;
         height: 100vh;
-        height: 100dvh;
+        height: 100dvh; /* dynamic viewport height untuk ponsel modern */
         padding: clamp(16px, 4vw, 24px) clamp(12px, 3vw, 18px);
         overflow-y: auto;
     }
@@ -2789,7 +2832,7 @@ body.dark .nav-tab:hover {
         justify-content: center;
     }
 
-
+    /* --- SIDEBAR TAMBAH LOKASI --- */
     .sidebar-section > a[href="/search"] {
         font-size: var(--fluid-sm) !important;
         padding: var(--sp-sm) 0;
@@ -2799,7 +2842,7 @@ body.dark .nav-tab:hover {
         justify-content: center;
     }
 
-
+    /* --- BOTTOM NAV --- */
     .bottom-nav {
         display: flex;
         padding: clamp(6px, 1.5vw, 10px) 0 max(clamp(6px, 1.5vw, 10px), env(safe-area-inset-bottom));
@@ -2815,14 +2858,14 @@ body.dark .nav-tab:hover {
         font-size: clamp(16px, 5vw, 20px);
     }
 
-
+    /* --- FLOATING BUTTONS --- */
     .nav-tab {
         width: 5px;
         height: clamp(60px, 16vw, 80px);
         left: 8px;
     }
 
-
+    /* --- CHAT BUBBLE --- */
     .chat-bubble {
         width: calc(100vw - clamp(24px, 6vw, 40px));
         right: clamp(12px, 3vw, 20px);
@@ -2864,7 +2907,7 @@ body.dark .nav-tab:hover {
         height: var(--touch-min);
     }
 
-
+    /* --- MODAL --- */
     .modal-content {
         padding: var(--sp-lg) var(--sp-md) !important;
         border-radius: clamp(20px, 6vw, 32px) !important;
@@ -2879,7 +2922,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-sm) !important;
     }
 
-
+    /* --- MODAL TIM --- */
     .modal-tim-content {
         padding: var(--sp-md);
         border-radius: clamp(18px, 5vw, 28px);
@@ -2921,7 +2964,7 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-xs) !important;
     }
 
-
+    /* --- ABOUT PAGE --- */
     .about-container {
         padding: 0 !important;
         gap: var(--sp-sm) !important;
@@ -2932,7 +2975,7 @@ body.dark .nav-tab:hover {
         line-height: 1.8 !important;
     }
 
-
+    /* --- WHATSAPP NOTIF --- */
     .whatsapp-notification {
         width: calc(100% - clamp(24px, 6vw, 40px));
         left: clamp(12px, 3vw, 20px);
@@ -2960,14 +3003,14 @@ body.dark .nav-tab:hover {
         font-size: var(--fluid-xs) !important;
     }
 
-
+    /* --- FOOTER --- */
     .footer {
         padding: var(--sp-md);
         margin-top: var(--sp-lg);
         font-size: var(--fluid-sm);
     }
 
-
+    /* --- OVERLAY SAAT SIDEBAR BUKA --- */
     body.sidebar-open::after {
         content: '';
         position: fixed;
@@ -2977,19 +3020,21 @@ body.dark .nav-tab:hover {
         pointer-events: auto;
     }
 
-
+    /* --- NAV-TAB IKUT BERGESER SAAT SIDEBAR BUKA --- */
     body.sidebar-open .nav-tab {
         left: calc(60% + 8px);
         transition: left 0.3s ease;
     }
 }
 
+/* --- Ponsel sangat kecil (< 360px): nav-tab ikut sidebar 75% --- */
 @media (max-width: 359px) {
     body.sidebar-open .nav-tab {
         left: calc(75% + 8px);
     }
 }
 
+/* --- Ponsel sangat kecil (< 360px) --- */
 @media (max-width: 359px) {
     .bottom-nav-item {
         min-width: 40px;
@@ -3023,6 +3068,7 @@ body.dark .nav-tab:hover {
     }
 }
 
+/* --- Ponsel landscape (tinggi < 500px) --- */
 @media (max-height: 500px) and (max-width: 900px) {
     .weather-hero {
         padding: 12px 16px !important;
