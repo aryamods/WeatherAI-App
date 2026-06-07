@@ -94,32 +94,32 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      CLIENT (Browser)                    │
-│              HTML + CSS + Vanilla JavaScript             │
+│                      CLIENT (Browser)                   │
+│              HTML + CSS + Vanilla JavaScript            │
 └────────────────────────┬────────────────────────────────┘
                          │ HTTP Request
 ┌────────────────────────▼────────────────────────────────┐
-│                   FastAPI Backend                        │
-│                                                          │
-│   ┌──────────────┐  ┌─────────────┐  ┌──────────────┐  │
-│   │  Route       │  │  ML Module  │  │  CV Module   │  │
-│   │  Handlers    │  │  (RF Model) │  │  (CNN Model) │  │
-│   └──────┬───────┘  └──────┬──────┘  └──────┬───────┘  │
+│                   FastAPI Backend                       │
+│                                                         │
+│   ┌──────────────┐  ┌─────────────┐  ┌──────────────┐   │
+│   │  Route       │  │  ML Module  │  │  CV Module   │   │
+│   │  Handlers    │  │  (RF Model) │  │  (CNN Model) │   │
+│   └──────┬───────┘  └──────┬──────┘  └──────┬───────┘   │
 │          │                 │                 │          │
 │   ┌──────▼─────────────────▼─────────────────▼───────┐  │
-│   │               Core Services                       │  │
-│   │  • WeatherService   • GeminiRotator               │  │
-│   │  • AirQualityService • LocationService            │  │
-│   │  • TimeService      • TestimonialService          │  │
+│   │               Core Services                      │  │
+│   │  • WeatherService   • GeminiRotator              │  │
+│   │  • AirQualityService • LocationService           │  │
+│   │  • TimeService      • TestimonialService         │  │
 │   └──────┬──────────────────────────────────┬────────┘  │
 └──────────┼──────────────────────────────────┼───────────┘
            │                                  │
 ┌──────────▼──────────┐             ┌─────────▼──────────┐
-│   External APIs     │             │   SQLite Database   │
-│                     │             │                     │
-│ • Open-Meteo API    │             │ • saved_locations   │
-│ • Air Quality API   │             │ • testimonials      │
-│ • Nominatim/OSM     │             │                     │
+│   External APIs     │             │   SQLite Databas   │
+│                     │             │                    │
+│ • Open-Meteo API    │             │ • saved_locations  │
+│ • Air Quality API   │             │ • testimonials     │
+│ • Nominatim/OSM     │             │                    │
 │ • Google Gemini API │             └────────────────────┘
 │ • Google Drive      │
 └─────────────────────┘
