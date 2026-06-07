@@ -468,7 +468,7 @@ Proyek ini dilisensikan di bawah **MIT License** — lihat file [LICENSE](LICENS
 
 <div align="center">
 
-Dibuat dengan ❤️ menggunakan Python & FastAPI
+Dibuat dengan ❤️ oleh Muhamad Arya Satya Athaillah
 
 ⭐ **Jika proyek ini bermanfaat, jangan lupa kasih star!** ⭐
 
